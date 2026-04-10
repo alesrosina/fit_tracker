@@ -7,10 +7,10 @@
     <description>Upload Garmin FIT files and track your running, cycling, and gym activities with maps and charts.</description>
     <version>1.0.0</version>
     <licence>agpl</licence>
-    <author mail="you@example.com">Your Name</author>
+    <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>
     <category>health</category>
-    <bugs>https://github.com/youruser/fit_tracker/issues</bugs>
+    <bugs>https://github.com/alesrosina/fit_tracker/issues</bugs>
     <dependencies>
         <php min-version="8.1"/>
         <nextcloud min-version="32" max-version="33"/>
