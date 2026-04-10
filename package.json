@@ -1,0 +1,27 @@
+{
+    "name": "fit_tracker",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "build": "webpack --config webpack.js --node-env production",
+        "dev": "webpack --config webpack.js --node-env development",
+        "watch": "webpack --config webpack.js --node-env development --watch"
+    },
+    "dependencies": {
+        "@nextcloud/axios": "^2.5.2",
+        "@nextcloud/dialogs": "^7.3.0",
+        "@nextcloud/router": "^3.1.0",
+        "@nextcloud/vue": "^9.6.0",
+        "chart.js": "^4.5.1",
+        "leaflet": "^1.9.4",
+        "vue": "^3.5.32",
+        "vue-router": "^5.0.4"
+    },
+    "devDependencies": {
+        "@nextcloud/webpack-vue-config": "^7.0.2",
+        "css-loader": "^7.1.4",
+        "mini-css-extract-plugin": "^2.10.2",
+        "style-loader": "^4.0.0",
+        "vue-loader": "^17.4.2"
+    }
+}
