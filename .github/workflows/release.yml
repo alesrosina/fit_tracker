@@ -1,0 +1,115 @@
+name: Build, sign and release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  APP_ID: fit_tracker
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer
+
+      - name: Install JS dependencies and build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install PHP dependencies (no dev)
+        run: composer install --no-dev --optimize-autoloader
+
+      - name: Write signing key and certificate
+        run: |
+          echo "${{ secrets.APP_PRIVATE_KEY }}" > /tmp/${{ env.APP_ID }}.key
+          echo "${{ secrets.APP_CERTIFICATE }}" > /tmp/${{ env.APP_ID }}.crt
+
+      - name: Sign the app
+        run: |
+          php -r "
+            \$appPath = '${{ github.workspace }}';
+            \$hashes  = [];
+            \$it = new RecursiveIteratorIterator(
+              new RecursiveDirectoryIterator(\$appPath, FilesystemIterator::SKIP_DOTS)
+            );
+            foreach (\$it as \$f) {
+              if (!\$f->isFile()) continue;
+              \$rel = ltrim(str_replace(\$appPath, '', \$f->getPathname()), '/');
+              if (\$rel === 'appinfo/signature.json') continue;
+              \$hashes[\$rel] = hash_file('sha512', \$f->getPathname());
+            }
+            ksort(\$hashes);
+            \$key = openssl_pkey_get_private(file_get_contents('/tmp/${{ env.APP_ID }}.key'));
+            openssl_sign(json_encode(\$hashes), \$sig, \$key, OPENSSL_ALGO_SHA512);
+            file_put_contents(\$appPath . '/appinfo/signature.json', json_encode([
+              'hashes'      => \$hashes,
+              'signature'   => base64_encode(\$sig),
+              'certificate' => file_get_contents('/tmp/${{ env.APP_ID }}.crt'),
+            ]));
+            echo 'App signed successfully.' . PHP_EOL;
+          "
+
+      - name: Create release tarball
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          cd ..
+          tar -czf ${{ env.APP_ID }}-${VERSION}.tar.gz \
+            --exclude="${{ env.APP_ID }}/.git" \
+            --exclude="${{ env.APP_ID }}/node_modules" \
+            --exclude="${{ env.APP_ID }}/src" \
+            --exclude="${{ env.APP_ID }}/.github" \
+            --exclude="${{ env.APP_ID }}/webpack.js" \
+            --exclude="${{ env.APP_ID }}/package*.json" \
+            --exclude="${{ env.APP_ID }}/composer.json" \
+            --exclude="${{ env.APP_ID }}/composer.lock" \
+            ${{ env.APP_ID }}
+          mv ${{ env.APP_ID }}-${VERSION}.tar.gz ${{ github.workspace }}/
+
+      - name: Sign tarball and prepare release metadata
+        id: meta
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          TARBALL="${{ env.APP_ID }}-${VERSION}.tar.gz"
+          SIGNATURE=$(openssl dgst -sha512 -sign /tmp/${{ env.APP_ID }}.key "$TARBALL" | openssl base64 -A)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "tarball=${TARBALL}" >> $GITHUB_OUTPUT
+          echo "signature=${SIGNATURE}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.meta.outputs.tarball }}
+
+      - name: Publish to Nextcloud App Store
+        run: |
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${GITHUB_REF_NAME}/${{ steps.meta.outputs.tarball }}"
+          RESPONSE=$(curl -s -o /tmp/store_response.json -w "%{http_code}" \
+            -X POST https://apps.nextcloud.com/api/v1/apps/releases \
+            -H "Authorization: Token ${{ secrets.NEXTCLOUD_STORE_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"download\": \"${DOWNLOAD_URL}\", \"signature\": \"${{ steps.meta.outputs.signature }}\"}")
+          echo "Store API response (HTTP ${RESPONSE}):"
+          cat /tmp/store_response.json
+          if [[ "$RESPONSE" != "2"* ]]; then
+            echo "::error::App Store publish failed with HTTP ${RESPONSE}"
+            exit 1
+          fi

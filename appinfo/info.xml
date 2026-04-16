@@ -9,7 +9,7 @@
     <licence>agpl</licence>
     <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>
-    <category>health</category>
+    <category>tools</category>
     <bugs>https://github.com/alesrosina/fit_tracker/issues</bugs>
     <dependencies>
         <php min-version="8.1"/>
