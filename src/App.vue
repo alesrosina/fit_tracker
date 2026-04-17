@@ -59,7 +59,7 @@
 
 <script>
 import { NcContent, NcAppNavigation, NcAppNavigationItem, NcAppContent, NcModal, NcButton } from '@nextcloud/vue'
-import { getFilePickerBuilder } from '@nextcloud/dialogs'
+import { getFilePickerBuilder, FilePickerType } from '@nextcloud/dialogs'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 
@@ -117,6 +117,7 @@ export default {
         async pickFolder() {
             const picker = getFilePickerBuilder('Select folder for FIT files')
                 .setMultiSelect(false)
+                .setType(FilePickerType.Choose)
                 .allowDirectories(true)
                 .build()
             try {
