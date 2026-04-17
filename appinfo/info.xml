@@ -3,14 +3,31 @@
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
     <id>fit_tracker</id>
     <name>FIT Tracker</name>
-    <summary>Self-hosted activity tracker for running, cycling and gym workouts</summary>
-    <description>Upload Garmin FIT files and track your running, cycling, and gym activities with maps and charts.</description>
-    <version>1.0.0</version>
+    <summary>Activity tracker for running, cycling and gym workouts</summary>
+    <description lang="en"><![CDATA[FIT Tracker is a Nextcloud app for tracking your fitness activities and sleep — powered by Garmin .fit files stored in your Nextcloud filesystem.
+
+Simply point the app at a folder containing your exported .fit files and it will automatically import and parse them.
+
+🏃 **Activity tracking**
+Supports Running, Cycling, Hiking, Swimming, Gym, Breathwork, Meditation, and Skiing. Each activity shows distance, duration, average heart rate, and calories. The detail view includes an interactive map with GPS route, elevation profile, heart rate chart, and a per-lap breakdown. The dashboard shows a monthly activity calendar and a last-7-days bar chart.
+
+😴 **Sleep tracking**
+Automatically detects Garmin sleep files and separates them from activity files. View all sleep sessions with a last-7-nights stacked bar chart (Deep / REM / Light / Awake). Each sleep detail page shows total duration, sleep score, HRV score, a full sleep timeline with stage transitions, and a per-stage table.
+
+⚙️ **Settings**
+Choose any folder in your Nextcloud as the source for .fit files. Re-sync is triggered automatically on folder save or manual navigation.]]></description>
+    <version>1.0.1</version>
     <licence>agpl</licence>
     <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>
     <category>tools</category>
     <bugs>https://github.com/alesrosina/fit_tracker/issues</bugs>
+    <screenshots>
+        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_list.png</screenshot>
+        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_detail.png</screenshot>
+        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_list.png</screenshot>
+        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_detail.png</screenshot>
+    </screenshots>
     <dependencies>
         <php min-version="8.1"/>
         <nextcloud min-version="32" max-version="33"/>
