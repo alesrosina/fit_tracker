@@ -4,17 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.0.2] - 2026-04-17
+## [1.0.3]
+
+### Changed
+- Added application screenshots to app description
+
+## [1.0.2]
 
 ### Changed
 - Fixed issue with selecting a folder in Settings
 
-## [1.0.1] - 2026-04-17
+## [1.0.1]
 
 ### Fixed
 - Improved app store description with detailed feature overview and screenshots
 
-## [1.0.0] - 2026-04-17
+## [1.0.0]
 
 ### Added
 - Initial release

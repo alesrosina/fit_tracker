@@ -16,18 +16,16 @@ Automatically detects Garmin sleep files and separates them from activity files.
 
 ⚙️ **Settings**
 Choose any folder in your Nextcloud as the source for .fit files. Re-sync is triggered automatically on folder save or manual navigation.]]></description>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <licence>agpl</licence>
     <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>
     <category>tools</category>
     <bugs>https://github.com/alesrosina/fit_tracker/issues</bugs>
-    <screenshots>
-        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_list.png</screenshot>
-        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_detail.png</screenshot>
-        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_list.png</screenshot>
-        <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_detail.png</screenshot>
-    </screenshots>
+    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_list.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_detail.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_list.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_detail.png</screenshot>
     <dependencies>
         <php min-version="8.1"/>
         <nextcloud min-version="32" max-version="33"/>
