@@ -14,9 +14,12 @@ Supports Running, Cycling, Hiking, Swimming, Gym, Breathwork, Meditation, and Sk
 😴 **Sleep tracking**
 Automatically detects Garmin sleep files and separates them from activity files. View all sleep sessions with a last-7-nights stacked bar chart (Deep / REM / Light / Awake). Each sleep detail page shows total duration, sleep score, HRV score, a full sleep timeline with stage transitions, and a per-stage table.
 
+📷 **Photo integration**
+For cycling and hiking activities, FIT Tracker automatically finds JPEG photos stored in your Nextcloud whose GPS coordinates fall within 200 m of the activity route. Photos appear as a thumbnail strip below the map and as clickable pins on the route map. Clicking a photo opens it in a full-screen overlay. Only GPS-tagged photos are shown.
+
 ⚙️ **Settings**
 Choose any folder in your Nextcloud as the source for .fit files. Re-sync is triggered automatically on folder save or manual navigation.]]></description>
-    <version>1.0.4</version>
+    <version>1.1.0</version>
     <licence>agpl</licence>
     <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>

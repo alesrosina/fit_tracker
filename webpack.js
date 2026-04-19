@@ -31,4 +31,8 @@ webpackConfig.plugins = [
     }),
 ]
 
+// Nextcloud apps run inside an already-loaded page; the default 244 KB limit
+// is not meaningful here, and large chunks are split out via dynamic imports above.
+webpackConfig.performance = { hints: false }
+
 module.exports = webpackConfig

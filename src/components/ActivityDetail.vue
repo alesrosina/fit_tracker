@@ -139,14 +139,17 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { defineAsyncComponent } from 'vue'
 import { NcModal } from '@nextcloud/vue'
-import ActivityMap from './ActivityMap.vue'
-import ActivityCharts from './ActivityCharts.vue'
-import ActivityPhotos from './ActivityPhotos.vue'
 
 export default {
     name: 'ActivityDetail',
-    components: { ActivityMap, ActivityCharts, ActivityPhotos, NcModal },
+    components: {
+        ActivityMap:    defineAsyncComponent(() => import('./ActivityMap.vue')),
+        ActivityCharts: defineAsyncComponent(() => import('./ActivityCharts.vue')),
+        ActivityPhotos: defineAsyncComponent(() => import('./ActivityPhotos.vue')),
+        NcModal,
+    },
     props: { id: { type: String, required: true } },
     data() {
         return {

@@ -63,14 +63,16 @@ class PhotoService {
             return [];
         }
 
-        // searchByMime hits the Nextcloud file-cache (DB), not the filesystem
-        $files   = $userFolder->searchByMime('image/jpeg');
         $startTs = $start->getTimestamp();
         $endTs   = $end->getTimestamp();
         // 26-hour buffer: 2 h activity slack + 24 h max UTC offset so EXIF local
         // timestamps (which carry no timezone) are never incorrectly rejected
         $windowBuffer = 26 * 3600;
-        $photos  = [];
+
+        // searchByMime queries only the file-cache (DB), not the filesystem.
+        // Memory cost here is metadata only; actual file bytes are read in readExifHeader.
+        $files  = $userFolder->searchByMime('image/jpeg');
+        $photos = [];
 
         foreach ($files as $file) {
             if (!($file instanceof File)) {
@@ -80,7 +82,7 @@ class PhotoService {
                 break;
             }
 
-            // Fast pre-filter on mtime — skip files clearly outside the day
+            // Cheap mtime pre-filter before opening the file at all
             $mtime = $file->getMTime();
             if ($mtime < $startTs - $windowBuffer || $mtime > $endTs + $windowBuffer) {
                 continue;
@@ -131,13 +133,17 @@ class PhotoService {
         try {
             $content = $file->getContent();
 
-            if (strlen($content) < 4 || substr($content, 0, 2) !== "\xFF\xD8") {
-                return null; // not a valid JPEG
+            // Take only the first 64 KB — enough for any EXIF block — then free
+            // the full content immediately so memory stays bounded per-file.
+            $header = substr($content, 0, 65536);
+            unset($content);
+
+            if (strlen($header) < 4 || substr($header, 0, 2) !== "\xFF\xD8") {
+                return null;
             }
 
             $tmpPath = tempnam(sys_get_temp_dir(), 'fit_exif_');
-            // Write only the first 64 KB — enough for any EXIF block
-            file_put_contents($tmpPath, substr($content, 0, 65536));
+            file_put_contents($tmpPath, $header);
             // as_arrays=true → GPS always nested under $exif['GPS'], EXIF under $exif['EXIF']
             $exif = @exif_read_data($tmpPath, null, true);
             @unlink($tmpPath);

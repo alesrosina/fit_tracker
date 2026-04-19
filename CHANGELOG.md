@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.0.4] - 2026-04-18
+## [1.1.0]
 
 ### Added
 - Photo integration for cycling and hiking activities — JPEG photos stored in Nextcloud whose GPS coordinates fall within 200 m of the activity route are automatically discovered

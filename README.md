@@ -20,7 +20,8 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 - **Activity cards** display distance, duration, average heart rate, and calories
 - **Detail view** per activity includes:
   - Key stats (distance, pace, heart rate, elevation, calories, cadence)
-  - Interactive Leaflet map with GPS route
+  - Interactive Leaflet map with GPS route and 📷 photo pins
+  - Photos taken along the route (cycling & hiking) shown as a thumbnail strip and as clickable map pins — only GPS-tagged JPEG photos stored in Nextcloud are matched, within 200 m of the track
   - Elevation profile chart
   - Heart rate chart
   - Lap table with per-lap pace/speed, heart rate and distance
