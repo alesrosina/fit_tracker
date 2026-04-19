@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.4] - 2026-04-18
+
+### Added
+- Photo integration for cycling and hiking activities — JPEG photos stored in Nextcloud whose GPS coordinates fall within 200 m of the activity route are automatically discovered
+- Photos appear as a thumbnail strip below the map and as 📷 pins on the route map
+- Nearby photos are clustered into a single pin with a count badge
+- Clicking a photo opens it in Nextcloud's native viewer overlay (falls back to a full-screen overlay when the Viewer app is unavailable)
+- Only GPS-tagged photos are included; images without EXIF coordinates are ignored
+
 ## [1.0.3]
 
 ### Changed

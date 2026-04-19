@@ -16,7 +16,7 @@ Automatically detects Garmin sleep files and separates them from activity files.
 
 ⚙️ **Settings**
 Choose any folder in your Nextcloud as the source for .fit files. Re-sync is triggered automatically on folder save or manual navigation.]]></description>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
     <licence>agpl</licence>
     <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>

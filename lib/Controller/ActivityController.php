@@ -6,6 +6,7 @@ namespace OCA\FitTracker\Controller;
 
 use OCA\FitTracker\AppInfo\Application;
 use OCA\FitTracker\Service\ActivityService;
+use OCA\FitTracker\Service\PhotoService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -19,6 +20,7 @@ class ActivityController extends Controller {
     public function __construct(
         IRequest                   $request,
         private ActivityService    $activityService,
+        private PhotoService       $photoService,
         private IUserSession       $userSession,
     ) {
         parent::__construct(Application::APP_ID, $request);
@@ -77,6 +79,28 @@ class ActivityController extends Controller {
         }
         try {
             return new DataResponse($this->activityService->getTrackpointsForUser($id, $userId));
+        } catch (DoesNotExistException) {
+            return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+        }
+    }
+
+    #[NoAdminRequired]
+    public function photos(int $id): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        try {
+            $activity    = $this->activityService->getForUser($id, $userId);
+            $trackpoints = $this->activityService->getTrackpointsForUser($id, $userId);
+
+            $photos = $this->photoService->getPhotosForActivity(
+                $userId,
+                $activity['startTime'],
+                $activity['duration'],
+                $trackpoints
+            );
+            return new DataResponse($photos);
         } catch (DoesNotExistException) {
             return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
         }

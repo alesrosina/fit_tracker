@@ -65,11 +65,19 @@
                 </div>
             </div>
 
-            <!-- Map (running + cycling only) -->
+            <!-- Map -->
             <ActivityMap
                 v-if="hasGps"
                 :trackpoints="trackpoints"
+                :photos="photos"
                 class="section"
+            />
+            <!-- Photos (cycling + hiking only, GPS-tagged images on the route) -->
+            <ActivityPhotos
+                v-if="photos.length > 0"
+                :photos="photos"
+                class="section"
+                @open-photo="openLightbox"
             />
 
             <!-- HR + elevation charts -->
@@ -107,26 +115,48 @@
                 </table>
             </div>
         </template>
+
+        <!-- Photo lightbox (NcModal fallback when OCA.Viewer is unavailable) -->
+        <NcModal
+            v-if="lightboxPhoto"
+            size="large"
+            :name="lightboxPhoto.name"
+            @close="lightboxPhoto = null"
+        >
+            <template #default>
+                <div class="lightbox-body">
+                    <img
+                        :src="lightboxPreviewUrl"
+                        :alt="lightboxPhoto.name"
+                        class="lightbox-img"
+                    />
+                </div>
+            </template>
+        </NcModal>
     </div>
 </template>
 
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { NcModal } from '@nextcloud/vue'
 import ActivityMap from './ActivityMap.vue'
 import ActivityCharts from './ActivityCharts.vue'
+import ActivityPhotos from './ActivityPhotos.vue'
 
 export default {
     name: 'ActivityDetail',
-    components: { ActivityMap, ActivityCharts },
+    components: { ActivityMap, ActivityCharts, ActivityPhotos, NcModal },
     props: { id: { type: String, required: true } },
     data() {
         return {
             activity: null,
             laps: [],
             trackpoints: [],
+            photos: [],
             loading: true,
             error: null,
+            lightboxPhoto: null,
         }
     },
     computed: {
@@ -158,9 +188,18 @@ export default {
             const s = Math.round((minPerKm - m) * 60)
             return `${m}:${String(s).padStart(2, '0')} /km`
         },
+        lightboxPreviewUrl() {
+            if (!this.lightboxPhoto) return ''
+            return generateUrl(`/core/preview?fileId=${this.lightboxPhoto.fileId}&x=2000&y=2000&a=1`)
+        },
     },
     async mounted() {
         await this.load()
+        this._photoOpenHandler = (e) => this.openLightbox(e.detail)
+        document.addEventListener('fit-photo-open', this._photoOpenHandler)
+    },
+    unmounted() {
+        document.removeEventListener('fit-photo-open', this._photoOpenHandler)
     },
     methods: {
         async load() {
@@ -175,10 +214,25 @@ export default {
                 this.activity    = actRes.data
                 this.laps        = lapRes.data
                 this.trackpoints = tpRes.data
+
+                if (['cycling', 'hiking'].includes(this.activity.sport)) {
+                    this.loadPhotos()
+                }
             } catch (e) {
                 this.error = e.response?.status === 404 ? 'Activity not found' : 'Failed to load activity'
             } finally {
                 this.loading = false
+            }
+        },
+        openLightbox(photo) {
+            this.lightboxPhoto = photo
+        },
+        async loadPhotos() {
+            try {
+                const res = await axios.get(generateUrl(`/apps/fit_tracker/api/activities/${this.id}/photos`))
+                this.photos = res.data
+            } catch {
+                // Photos are optional — silently ignore errors
             }
         },
         async deleteActivity() {
@@ -298,4 +352,17 @@ export default {
 .laps-table th { font-weight: 600; color: var(--color-text-maxcontrast); }
 .loading, .error { padding: 40px; text-align: center; }
 .error { color: var(--color-error); }
+.lightbox-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    min-height: 300px;
+}
+.lightbox-img {
+    max-width: 100%;
+    max-height: 80vh;
+    object-fit: contain;
+    border-radius: 4px;
+}
 </style>
