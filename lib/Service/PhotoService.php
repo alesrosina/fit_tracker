@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 namespace OCA\FitTracker\Service;
 
+use OC\Files\Search\SearchBinaryOperator;
+use OC\Files\Search\SearchComparison;
+use OC\Files\Search\SearchQuery;
 use OCP\Files\File;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
+use OCP\Files\Search\ISearchBinaryOperator;
+use OCP\Files\Search\ISearchComparison;
 
 class PhotoService {
 
@@ -68,10 +73,17 @@ class PhotoService {
         // 26-hour buffer: 2 h activity slack + 24 h max UTC offset so EXIF local
         // timestamps (which carry no timezone) are never incorrectly rejected
         $windowBuffer = 26 * 3600;
+        $minMtime     = $startTs - $windowBuffer;
+        $maxMtime     = $endTs + $windowBuffer;
 
-        // searchByMime queries only the file-cache (DB), not the filesystem.
-        // Memory cost here is metadata only; actual file bytes are read in readExifHeader.
-        $files  = $userFolder->searchByMime('image/jpeg');
+        // Push mime + mtime filter into DB so we never iterate all user jpegs.
+        // COMPARE_GREATER_THAN with (x - 1) is equivalent to >= x for integer mtimes.
+        $constraint = new SearchBinaryOperator(ISearchBinaryOperator::OPERATOR_AND, [
+            new SearchComparison(ISearchComparison::COMPARE_EQUAL, 'mimetype', 'image/jpeg'),
+            new SearchComparison(ISearchComparison::COMPARE_GREATER_THAN, 'mtime', $minMtime - 1),
+            new SearchComparison(ISearchComparison::COMPARE_LESS_THAN, 'mtime', $maxMtime + 1),
+        ]);
+        $files  = $userFolder->search(new SearchQuery($constraint, 0, 0, []));
         $photos = [];
 
         foreach ($files as $file) {
@@ -80,12 +92,6 @@ class PhotoService {
             }
             if (count($photos) >= self::MAX_PHOTOS) {
                 break;
-            }
-
-            // Cheap mtime pre-filter before opening the file at all
-            $mtime = $file->getMTime();
-            if ($mtime < $startTs - $windowBuffer || $mtime > $endTs + $windowBuffer) {
-                continue;
             }
 
             $exif = $this->readExifHeader($file);
@@ -131,12 +137,18 @@ class PhotoService {
         }
 
         try {
-            $content = $file->getContent();
-
-            // Take only the first 64 KB — enough for any EXIF block — then free
-            // the full content immediately so memory stays bounded per-file.
-            $header = substr($content, 0, 65536);
-            unset($content);
+            // Stream only 64 KB — the JPEG APP1/EXIF segment is at most 65 534 B,
+            // so GPS data is always within the first 64 KB.
+            $handle = $file->fopen('rb');
+            if (is_resource($handle)) {
+                $header = (string) stream_get_contents($handle, 65536);
+                fclose($handle);
+            } else {
+                // Storage doesn't support streaming; load full file then free ASAP.
+                $content = $file->getContent();
+                $header  = substr($content, 0, 65536);
+                unset($content);
+            }
 
             if (strlen($header) < 4 || substr($header, 0, 2) !== "\xFF\xD8") {
                 return null;
