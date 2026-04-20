@@ -78,12 +78,22 @@ class PhotoService {
 
         // Push mime + mtime filter into DB so we never iterate all user jpegs.
         // COMPARE_GREATER_THAN with (x - 1) is equivalent to >= x for integer mtimes.
-        $constraint = new SearchBinaryOperator(ISearchBinaryOperator::OPERATOR_AND, [
-            new SearchComparison(ISearchComparison::COMPARE_EQUAL, 'mimetype', 'image/jpeg'),
+        // Nested binary operators used for NC32 compatibility.
+        $timeConstraint = new SearchBinaryOperator(ISearchBinaryOperator::OPERATOR_AND, [
             new SearchComparison(ISearchComparison::COMPARE_GREATER_THAN, 'mtime', $minMtime - 1),
             new SearchComparison(ISearchComparison::COMPARE_LESS_THAN, 'mtime', $maxMtime + 1),
         ]);
-        $files  = $userFolder->search(new SearchQuery($constraint, 0, 0, []));
+        $constraint = new SearchBinaryOperator(ISearchBinaryOperator::OPERATOR_AND, [
+            new SearchComparison(ISearchComparison::COMPARE_EQUAL, 'mimetype', 'image/jpeg'),
+            $timeConstraint,
+        ]);
+        try {
+            // limit=500 prevents loading thousands of Node+metadata objects when the
+            // mtime DB filter is ignored by some NC backends (limit=0 means unlimited).
+            $files = $userFolder->search(new SearchQuery($constraint, 500, 0, []));
+        } catch (\Throwable) {
+            return [];
+        }
         $photos = [];
 
         foreach ($files as $file) {
@@ -92,6 +102,12 @@ class PhotoService {
             }
             if (count($photos) >= self::MAX_PHOTOS) {
                 break;
+            }
+
+            // Loop-level mtime guard: skips files the DB filter may have missed.
+            $mtime = $file->getMTime();
+            if ($mtime < $minMtime || $mtime > $maxMtime) {
+                continue;
             }
 
             $exif = $this->readExifHeader($file);

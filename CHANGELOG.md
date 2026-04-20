@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.1.1]
+## [1.1.2]
 
 ### Fixed
 - Reduced memory usage when scanning photos: stream only 64 KB per file instead of loading the full JPEG
