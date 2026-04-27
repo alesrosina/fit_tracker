@@ -62,6 +62,7 @@ import { NcContent, NcAppNavigation, NcAppNavigationItem, NcAppContent, NcModal,
 import { getFilePickerBuilder, FilePickerType } from '@nextcloud/dialogs'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { SPORTS } from './sports.js'
 
 export default {
     name: 'App',
@@ -74,16 +75,9 @@ export default {
             saveError: null,
             saveSuccess: false,
             sports: [
-                { value: 'all',      label: 'All Activities', icon: '🏅' },
-                { value: 'running',  label: 'Running',        icon: '🏃' },
-                { value: 'cycling',  label: 'Cycling',        icon: '🚴' },
-                { value: 'hiking',   label: 'Hiking',         icon: '🥾' },
-                { value: 'swimming', label: 'Swimming',       icon: '🏊' },
-                { value: 'gym',        label: 'Gym',            icon: '🏋' },
-                { value: 'breathwork',  label: 'Breathwork',  icon: '🧘' },
-                { value: 'meditation',  label: 'Meditation',  icon: '🕉️' },
-                { value: 'skiing',      label: 'Skiing',      icon: '⛷️' },
-                { value: 'sleep',       label: 'Sleep',       icon: '🛌' },
+                { value: 'all',   label: 'All Activities', icon: '🏅' },
+                ...SPORTS,
+                { value: 'sleep', label: 'Sleep',          icon: '🛌' },
             ],
         }
     },

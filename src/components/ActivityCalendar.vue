@@ -14,7 +14,9 @@
                 :class="{
                     'cal-cell--filler': !cell,
                     'cal-cell--today': cell && cell.isToday,
+                    'cal-cell--selected': cell && cell.isSelected,
                 }"
+                @click="cell && selectDay(cell)"
             >
                 <template v-if="cell">
                     <span class="cal-cell__day">{{ cell.day }}</span>
@@ -34,25 +36,17 @@
 </template>
 
 <script>
-const SPORT_COLORS = {
-    running: '#ef4444',
-    cycling: '#0082c9',
-    hiking: '#22c55e',
-    swimming: '#06b6d4',
-    gym: '#f97316',
-    breathwork: '#8b5cf6',
-    meditation: '#6366f1',
-    skiing: '#38bdf8',
-}
+import { sportColor } from '../sports.js'
 
 export default {
     name: 'ActivityCalendar',
     props: {
         activities: { type: Array, required: true },
     },
+    emits: ['select-date'],
     data() {
         const now = new Date()
-        return { year: now.getFullYear(), month: now.getMonth() }
+        return { year: now.getFullYear(), month: now.getMonth(), selectedDay: null }
     },
     computed: {
         monthTitle() {
@@ -84,7 +78,9 @@ export default {
                 const key = `${year}-${month}-${d}`
                 cells.push({
                     day: d,
+                    date: new Date(year, month, d),
                     isToday: year === today.getFullYear() && month === today.getMonth() && d === today.getDate(),
+                    isSelected: this.selectedDay !== null && year === this.selectedDay.getFullYear() && month === this.selectedDay.getMonth() && d === this.selectedDay.getDate(),
                     activities: this.activityByDay[key] ?? [],
                 })
             }
@@ -100,8 +96,10 @@ export default {
             if (this.month === 11) { this.year++; this.month = 0 }
             else this.month++
         },
-        sportColor(sport) {
-            return SPORT_COLORS[sport] ?? '#8b5cf6'
+        sportColor,
+        selectDay(cell) {
+            this.selectedDay = cell.date
+            this.$emit('select-date', cell.date)
         },
     },
 }
@@ -152,6 +150,12 @@ export default {
     align-items: center;
 }
 .cal-cell--filler { border: none; }
+.cal-cell { cursor: pointer; }
+.cal-cell--filler { cursor: default; }
+.cal-cell--selected {
+    background: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
+    border-color: var(--color-primary-element);
+}
 .cal-cell--today {
     border-color: var(--color-primary-element);
     background: var(--color-primary-element-light, rgba(0, 130, 201, 0.1));

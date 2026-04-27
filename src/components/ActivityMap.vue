@@ -27,10 +27,7 @@ export default {
         },
     },
     mounted() {
-        this.$nextTick(() => {
-            this.initMap()
-            this.registerPhotoOpener()
-        })
+        this.$nextTick(() => this.initMap())
     },
     methods: {
         initMap() {
@@ -88,36 +85,74 @@ export default {
                     popupAnchor: [0, -18],
                 })
 
-                const items = cluster.map(photo => {
-                    const thumbUrl = generateUrl(`/core/preview?fileId=${photo.fileId}&x=120&y=120&a=1`)
-                    const time     = photo.takenAt
+                const photoData = cluster.map(photo => ({
+                    fileId: photo.fileId,
+                    name: photo.name || '',
+                    thumbUrl: generateUrl(`/core/preview?fileId=${photo.fileId}&x=160&y=160&a=1`),
+                    time: photo.takenAt
                         ? new Date(photo.takenAt.replace(' ', 'T')).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-                        : ''
-                    const encodedName = encodeURIComponent(photo.name || '')
-                    return `
-                        <div class="photo-popup__item" style="cursor:pointer"
-                             data-fileid="${photo.fileId}" data-name="${encodedName}"
-                             onclick="window.__fitOpenPhoto(this)">
-                            <img src="${thumbUrl}" width="120" height="120" style="object-fit:cover;border-radius:4px;display:block;">
-                            ${time ? `<div class="photo-popup__time">${time}</div>` : ''}
-                        </div>`
-                }).join('')
-
-                // 126 = 120px thumb + 6px gap; 30px covers Leaflet's internal padding
-                const popupWidth = Math.min(count, 3) * 126 + 30
-                L.marker([lat, lon], { icon })
-                    .bindPopup(`<div class="photo-popup">${items}</div>`, { maxWidth: popupWidth })
-                    .addTo(this.map)
-            }
-        },
-        registerPhotoOpener() {
-            window.__fitOpenPhoto = (el) => {
-                document.dispatchEvent(new CustomEvent('fit-photo-open', {
-                    detail: {
-                        fileId: el.dataset.fileid,
-                        name: decodeURIComponent(el.dataset.name || ''),
-                    },
+                        : '',
                 }))
+
+                const first   = photoData[0]
+                const multi   = count > 1
+
+                const popupHtml = `
+                    <div class="photo-popup">
+                        <div class="photo-carousel">
+                            <img class="photo-carousel__img" src="${first.thumbUrl}" width="160" height="160">
+                            ${multi ? `
+                            <button class="button-vue photo-carousel__btn photo-carousel__btn--prev" style="display:none">&#8249;</button>
+                            <button class="button-vue photo-carousel__btn photo-carousel__btn--next">&#8250;</button>
+                            ` : ''}
+                        </div>
+                        <div class="photo-carousel__footer">
+                            <span class="photo-carousel__time">${first.time}</span>
+                            ${multi ? `<span class="photo-carousel__counter">1 / ${count}</span>` : ''}
+                        </div>
+                    </div>`
+
+                const marker = L.marker([lat, lon], { icon })
+                    .bindPopup(popupHtml, { maxWidth: 200 })
+                    .addTo(this.map)
+
+                marker.on('popupopen', () => {
+                    const el        = marker.getPopup().getElement()
+                    const img       = el.querySelector('.photo-carousel__img')
+                    const prevBtn   = el.querySelector('.photo-carousel__btn--prev')
+                    const nextBtn   = el.querySelector('.photo-carousel__btn--next')
+                    const counterEl = el.querySelector('.photo-carousel__counter')
+                    const timeEl    = el.querySelector('.photo-carousel__time')
+                    let idx = 0
+
+                    const refresh = () => {
+                        const p = photoData[idx]
+                        img.src = p.thumbUrl
+                        if (timeEl)    timeEl.textContent    = p.time
+                        if (counterEl) counterEl.textContent = `${idx + 1} / ${photoData.length}`
+                        if (prevBtn)   prevBtn.style.display = idx === 0 ? 'none' : 'flex'
+                        if (nextBtn)   nextBtn.style.display = idx === photoData.length - 1 ? 'none' : 'flex'
+                    }
+
+                    img.addEventListener('click', () => {
+                        document.dispatchEvent(new CustomEvent('fit-photo-open', {
+                            detail: { fileId: photoData[idx].fileId, name: photoData[idx].name },
+                        }))
+                    })
+
+                    if (prevBtn) {
+                        prevBtn.addEventListener('click', (e) => {
+                            e.stopPropagation()
+                            if (idx > 0) { idx--; refresh() }
+                        })
+                    }
+                    if (nextBtn) {
+                        nextBtn.addEventListener('click', (e) => {
+                            e.stopPropagation()
+                            if (idx < photoData.length - 1) { idx++; refresh() }
+                        })
+                    }
+                })
             }
         },
         clusterPhotos(photos, thresholdMeters) {
@@ -188,20 +223,50 @@ export default {
     text-align: center;
 }
 .photo-popup {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 6px;
-    justify-content: center;
     font-size: 12px;
     padding: 2px;
+    width: 160px;
 }
-.photo-popup__item {
-    flex: 0 0 auto;
-    text-align: center;
+.photo-carousel {
+    position: relative;
+    width: 160px;
+    height: 160px;
 }
-.photo-popup__time {
-    margin: 3px 0 0;
+.photo-carousel__img {
+    width: 160px;
+    height: 160px;
+    object-fit: cover;
+    border-radius: 4px;
+    display: block;
+    cursor: pointer;
+}
+.photo-carousel__btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: rgba(0, 0, 0, 0.45);
+    border-radius: 50%;
+    color: #fff;
+    border: none;
+    width: 26px;
+    height: 26px;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+}
+.photo-carousel__btn:hover { background: rgba(0, 0, 0, 0.65); }
+.photo-carousel__btn--prev { left: 4px; }
+.photo-carousel__btn--next { right: 4px; }
+.photo-carousel__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 4px;
     color: #666;
 }
+.photo-carousel__counter { font-weight: 600; }
 </style>

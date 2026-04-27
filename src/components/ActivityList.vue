@@ -15,11 +15,10 @@
                 <div class="dashboard-row">
                     <div class="dashboard-panel">
                         <h3 class="panel-title">{{ monthTitle }}</h3>
-                        <ActivityCalendar :activities="filtered" />
+                        <ActivityCalendar :activities="filtered" @select-date="calendarSelectedDate = $event" />
                     </div>
                     <div class="dashboard-panel">
-                        <h3 class="panel-title">Last 7 Days</h3>
-                        <ActivityWeekChart :activities="filtered" />
+                        <ActivityWeekChart :activities="filtered" :anchorDate="calendarSelectedDate" />
                     </div>
                 </div>
                 <div v-if="lastSleep" class="dashboard-row dashboard-row--sleep">
@@ -65,7 +64,7 @@
                         <div class="activity-card__icon">{{ sportIcon(activity.sport) }}</div>
                         <div class="activity-card__body">
                             <div class="activity-card__name">{{ activity.name }}</div>
-                            <div class="activity-card__date">{{ formatDate(activity.startTime) }}</div>
+                            <div class="activity-card__date">{{ formatTimeRange(activity.startTime, activity.duration) }}</div>
                             <div class="activity-card__stats">
                                 <span v-if="activity.distance">{{ formatDistance(activity.distance) }}</span>
                                 <span v-if="activity.duration">{{ formatDuration(activity.duration) }}</span>
@@ -91,6 +90,7 @@ import { generateUrl } from '@nextcloud/router'
 import ActivityCalendar from './ActivityCalendar.vue'
 import ActivityWeekChart from './ActivityWeekChart.vue'
 import SleepStageBar from './SleepStageBar.vue'
+import { sportIcon as getSportIcon, sportLabel } from '../sports.js'
 
 export default {
     name: 'ActivityList',
@@ -103,12 +103,13 @@ export default {
             loading: true,
             error: null,
             currentPage: 1,
+            calendarSelectedDate: null,
         }
     },
     computed: {
         pageTitle() {
-            const labels = { running: 'Running', cycling: 'Cycling', hiking: 'Hiking', swimming: 'Swimming', gym: 'Gym', breathwork: 'Breathwork', meditation: 'Meditation', skiing: 'Skiing' }
-            return labels[this.$route.query.sport] || 'All Activities'
+            const sport = this.$route.query.sport
+            return sport ? sportLabel(sport) : 'All Activities'
         },
         monthTitle() {
             return new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
@@ -158,12 +159,19 @@ export default {
                 this.loading = false
             }
         },
-        sportIcon(sport) {
-            return { running: '🏃', cycling: '🚴', hiking: '🥾', swimming: '🏊', gym: '🏋', breathwork: '🧘', meditation: '🕉️', skiing: '⛷️' }[sport] ?? '🏅'
-        },
+        sportIcon: getSportIcon,
         formatDate(raw) {
             if (!raw) return ''
             return new Date(raw).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+        },
+        formatTimeRange(startRaw, durationSeconds) {
+            if (!startRaw) return ''
+            const start = new Date(startRaw)
+            const opts = { hour: '2-digit', minute: '2-digit' }
+            const from = start.toLocaleTimeString(undefined, opts)
+            if (!durationSeconds) return from
+            const end = new Date(start.getTime() + durationSeconds * 1000)
+            return `${from} – ${end.toLocaleTimeString(undefined, opts)}`
         },
         formatDistance(km) {
             if (km < 1) return Math.round(km * 1000) + ' m'
