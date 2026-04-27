@@ -3,7 +3,7 @@
         <h3>Photos ({{ photos.length }})</h3>
         <div class="photo-grid">
             <div
-                v-for="photo in photos"
+                v-for="photo in sortedPhotos"
                 :key="photo.fileId"
                 class="photo-thumb"
                 @click="$emit('open-photo', photo)"
@@ -28,6 +28,15 @@ export default {
         photos: { type: Array, required: true },
     },
     emits: ['open-photo'],
+    computed: {
+        sortedPhotos() {
+            return [...this.photos].sort((a, b) => {
+                if (!a.takenAt) return 1
+                if (!b.takenAt) return -1
+                return new Date(a.takenAt.replace(' ', 'T')) - new Date(b.takenAt.replace(' ', 'T'))
+            })
+        },
+    },
     methods: {
         thumbnailUrl(fileId) {
             return generateUrl(`/core/preview?fileId=${fileId}&x=200&y=200&a=1`)

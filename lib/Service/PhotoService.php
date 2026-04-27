@@ -70,9 +70,8 @@ class PhotoService {
 
         $startTs = $start->getTimestamp();
         $endTs   = $end->getTimestamp();
-        // 26-hour buffer: 2 h activity slack + 24 h max UTC offset so EXIF local
-        // timestamps (which carry no timezone) are never incorrectly rejected
-        $windowBuffer = 26 * 3600;
+        // mtime pre-filter: DB-level guard to limit EXIF reads. 2 h covers upload lag.
+        $windowBuffer = 2 * 3600;
         $minMtime     = $startTs - $windowBuffer;
         $maxMtime     = $endTs + $windowBuffer;
 

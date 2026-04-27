@@ -141,6 +141,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { defineAsyncComponent } from 'vue'
 import { NcModal } from '@nextcloud/vue'
+import { sportIcon as getSportIcon } from '../sports.js'
 
 export default {
     name: 'ActivityDetail',
@@ -164,7 +165,7 @@ export default {
     },
     computed: {
         sportIcon() {
-            return { running: '🏃', cycling: '🚴', hiking: '🥾', swimming: '🏊', gym: '🏋', breathwork: '🧘', meditation: '🕉️', skiing: '⛷️' }[this.activity?.sport] ?? '🏅'
+            return getSportIcon(this.activity?.sport)
         },
         hasGps() {
             return this.trackpoints.some(tp => tp.lat !== null && tp.lon !== null)
@@ -218,7 +219,7 @@ export default {
                 this.laps        = lapRes.data
                 this.trackpoints = tpRes.data
 
-                if (['cycling', 'hiking'].includes(this.activity.sport)) {
+                if (['cycling', 'hiking', 'walking'].includes(this.activity.sport)) {
                     this.loadPhotos()
                 }
             } catch (e) {

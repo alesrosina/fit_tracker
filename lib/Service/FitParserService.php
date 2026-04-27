@@ -126,7 +126,7 @@ class FitParserService {
             return 'running';
         }
         if (str_contains($raw, 'walk') || str_contains($sub, 'walk') || str_contains($sportName, 'walk')) {
-            return 'hiking';
+            return 'walking';
         }
         if (str_contains($raw, 'ski') || str_contains($sub, 'ski') || str_contains($sportName, 'ski')) {
             return 'skiing';
@@ -168,12 +168,12 @@ class FitParserService {
         }
 
         if ($ts === null) {
-            return (new \DateTime())->format('Y-m-d H:i:s');
+            return (new \DateTime('now', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
         }
 
         // Timestamps are already Unix epoch (library adds FIT_UNIX_TS_DIFF by default)
         if (is_int($ts) || ctype_digit((string) $ts)) {
-            return (new \DateTime('@' . (int) $ts))->format('Y-m-d H:i:s');
+            return (new \DateTime('@' . (int) $ts))->format('Y-m-d\TH:i:s\Z');
         }
 
         return (string) $ts;
@@ -214,7 +214,7 @@ class FitParserService {
 
             $startTs = $getField('start_time');
             if ($startTs !== null && (is_int($startTs) || ctype_digit((string) $startTs))) {
-                $startTs = (new \DateTime('@' . (int) $startTs))->format('Y-m-d H:i:s');
+                $startTs = (new \DateTime('@' . (int) $startTs))->format('Y-m-d\TH:i:s\Z');
             }
 
             $dur  = $getField('total_elapsed_time') ?? $getField('total_timer_time');
@@ -264,7 +264,7 @@ class FitParserService {
             };
 
             $trackpoints[] = [
-                'timestamp'  => (new \DateTime('@' . (int) $ts))->format('Y-m-d H:i:s'),
+                'timestamp'  => (new \DateTime('@' . (int) $ts))->format('Y-m-d\TH:i:s\Z'),
                 'lat'        => ($v = $get('position_lat'))   !== null ? (float) $v : null,
                 'lon'        => ($v = $get('position_long'))  !== null ? (float) $v : null,
                 'altitude'   => ($v = ($get('altitude') ?? $get('enhanced_altitude'))) !== null ? (float) $v : null,

@@ -113,7 +113,7 @@ class SleepParserService {
         $firstRaw = $stageMsgs[0][253]                        ?? null;
         $lastRaw  = $stageMsgs[count($stageMsgs) - 1][253]   ?? null;
 
-        $startTime = $firstRaw !== null ? $this->fitTimestamp($firstRaw) : (new \DateTime())->format('Y-m-d H:i:s');
+        $startTime = $firstRaw !== null ? $this->fitTimestamp($firstRaw) : (new \DateTime('now', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
         $endTime   = $lastRaw  !== null ? $this->fitTimestamp($lastRaw)  : $startTime;
         $duration  = ($firstRaw !== null && $lastRaw !== null) ? ($lastRaw - $firstRaw) : 0;
 
@@ -277,6 +277,6 @@ class SleepParserService {
     }
 
     private function fitTimestamp(int $raw): string {
-        return (new \DateTime('@' . ($raw + self::FIT_EPOCH)))->format('Y-m-d H:i:s');
+        return (new \DateTime('@' . ($raw + self::FIT_EPOCH)))->format('Y-m-d\TH:i:s\Z');
     }
 }

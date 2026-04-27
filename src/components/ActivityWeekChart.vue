@@ -1,23 +1,59 @@
 <template>
     <div class="week-chart">
+        <div class="week-nav">
+            <button class="week-btn" @click="prevWeek">‹</button>
+            <strong>{{ weekTitle }}</strong>
+            <button class="week-btn" @click="nextWeek" :disabled="!canGoNext">›</button>
+        </div>
         <canvas ref="canvas"></canvas>
     </div>
 </template>
 
 <script>
 import { Chart, BarController, BarElement, LinearScale, CategoryScale, Tooltip } from 'chart.js'
+import { sportIcon, sportColor } from '../sports.js'
 Chart.register(BarController, BarElement, LinearScale, CategoryScale, Tooltip)
+
+function getMonday(d) {
+    const date = new Date(d)
+    const day = date.getDay()
+    date.setDate(date.getDate() + (day === 0 ? -6 : 1 - day))
+    date.setHours(0, 0, 0, 0)
+    return date
+}
 
 export default {
     name: 'ActivityWeekChart',
     props: {
         activities: { type: Array, required: true },
+        anchorDate: { default: null },
     },
     data() {
-        return { chart: null }
+        return {
+            chart: null,
+            weekStart: getMonday(new Date()),
+        }
+    },
+    computed: {
+        canGoNext() {
+            return this.weekStart < getMonday(new Date())
+        },
+        weekTitle() {
+            const diff = Math.round((this.weekStart - getMonday(new Date())) / (7 * 86400 * 1000))
+            if (diff === 0) return 'This Week'
+            if (diff === -1) return 'Last Week'
+            const sun = new Date(this.weekStart)
+            sun.setDate(sun.getDate() + 6)
+            const fmt = d => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+            return `${fmt(this.weekStart)} – ${fmt(sun)}`
+        },
     },
     watch: {
         activities() { this.rebuild() },
+        weekStart() { this.rebuild() },
+        anchorDate(d) {
+            if (d) this.weekStart = getMonday(d)
+        },
     },
     mounted() {
         this.$nextTick(() => this.rebuild())
@@ -26,9 +62,20 @@ export default {
         this.chart?.destroy()
     },
     methods: {
+        prevWeek() {
+            const d = new Date(this.weekStart)
+            d.setDate(d.getDate() - 7)
+            this.weekStart = d
+        },
+        nextWeek() {
+            if (!this.canGoNext) return
+            const d = new Date(this.weekStart)
+            d.setDate(d.getDate() + 7)
+            this.weekStart = d
+        },
         rebuild() {
             this.chart?.destroy()
-            const { labels, datasets, emojisByDay, totalByDay } = this.last7Days()
+            const { labels, datasets, emojisByDay, totalByDay } = this.buildWeek()
 
             const emojiPlugin = {
                 id: 'emojiAboveBar',
@@ -63,8 +110,7 @@ export default {
                             callbacks: {
                                 label: ctx => {
                                     if (!ctx.parsed.y) return null
-                                    const ICONS = { running: '🏃', cycling: '🚴', hiking: '🥾', swimming: '🏊', gym: '🏋', breathwork: '🧘', meditation: '🕉️', skiing: '⛷️' }
-                                    const icon = ICONS[ctx.dataset.label] ?? '🏅'
+                                    const icon = sportIcon(ctx.dataset.label)
                                     return `${icon} ${ctx.dataset.label}: ${ctx.parsed.y} min`
                                 },
                             },
@@ -82,15 +128,12 @@ export default {
                 },
             })
         },
-        last7Days() {
-            const ICONS  = { running: '🏃', cycling: '🚴', hiking: '🥾', swimming: '🏊', gym: '🏋', breathwork: '🧘', meditation: '🕉️', skiing: '⛷️' }
-            const COLORS = { running: '#f97316', cycling: '#0082c9', hiking: '#16a34a', swimming: '#06b6d4', gym: '#7c3aed', breathwork: '#0d9488', meditation: '#6366f1', skiing: '#38bdf8' }
+        buildWeek() {
             const DEFAULT_COLOR = '#94a3b8'
 
-            const today = new Date()
             const days = Array.from({ length: 7 }, (_, i) => {
-                const d = new Date(today)
-                d.setDate(today.getDate() - (6 - i))
+                const d = new Date(this.weekStart)
+                d.setDate(d.getDate() + i)
                 return d
             })
             const labels = days.map(d => {
@@ -100,7 +143,6 @@ export default {
                 return `${wd} ${mm}.${dd}.`
             })
 
-            // activities per day
             const byDay = days.map(d => this.activities.filter(a => {
                 if (!a.startTime) return false
                 const ad = new Date(a.startTime)
@@ -109,12 +151,10 @@ export default {
                     && ad.getDate() === d.getDate()
             }))
 
-            // sports present across these 7 days (in a stable order)
             const sportsPresent = [...new Set(byDay.flat().map(a => a.sport).filter(Boolean))]
 
-            // one dataset per sport
             const datasets = sportsPresent.map(sport => {
-                const color = COLORS[sport] ?? DEFAULT_COLOR
+                const color = sportColor(sport) ?? DEFAULT_COLOR
                 return {
                     label: sport,
                     data: byDay.map(acts =>
@@ -128,10 +168,9 @@ export default {
                 }
             })
 
-            // emojis & totals per day for the plugin
             const emojisByDay = byDay.map(acts => {
                 const seen = new Set()
-                const emojis = acts.map(a => ICONS[a.sport] ?? '🏅').filter(e => !seen.has(e) && seen.add(e))
+                const emojis = acts.map(a => sportIcon(a.sport)).filter(e => !seen.has(e) && seen.add(e))
                 return emojis.length ? emojis.join('') : null
             })
             const totalByDay = byDay.map(acts =>
@@ -149,4 +188,22 @@ export default {
     flex: 1;
     min-width: 280px;
 }
+.week-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.week-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 2px 10px;
+    color: var(--color-main-text);
+}
+.week-btn:hover:not(:disabled) { background: var(--color-background-dark); }
+.week-btn:disabled { opacity: 0.3; cursor: default; }
 </style>
