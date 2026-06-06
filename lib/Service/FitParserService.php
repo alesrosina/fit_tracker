@@ -275,7 +275,7 @@ class FitParserService {
             };
 
             $trackpoints[] = [
-                'timestamp'  => (new \DateTime('@' . (int) $ts))->format('Y-m-d\TH:i:s\Z'),
+                'timestamp'  => (new \DateTime('@' . (int) $ts))->format('Y-m-d H:i:s'),
                 'lat'        => ($v = $get('position_lat'))   !== null ? (float) $v : null,
                 'lon'        => ($v = $get('position_long'))  !== null ? (float) $v : null,
                 'altitude'   => ($v = ($get('altitude') ?? $get('enhanced_altitude'))) !== null ? (float) $v : null,
