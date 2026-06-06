@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.5]
+
+### Fixed
+- FIT file import no longer crashes on files where a single cadence or timestamp record was collapsed to a scalar by the parser library — the importer now retries without data-gap-fixing, which bypasses the problematic code path
+
 ## [1.1.4]
 
 ### Fixed

@@ -6,10 +6,9 @@ webpackConfig.entry = {
     'fit_tracker-main': path.join(__dirname, 'src', 'main.js'),
 }
 
-// Use short hash-based chunk names; fix publicPath for custom_apps installation
 webpackConfig.output = {
     ...webpackConfig.output,
-    publicPath: '/custom_apps/fit_tracker/js/',
+    publicPath: 'auto',
     chunkFilename: 'fit_tracker-chunk-[contenthash:8].js',
 }
 

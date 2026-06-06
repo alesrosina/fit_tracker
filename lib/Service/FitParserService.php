@@ -16,7 +16,7 @@ use Exception;
  *   - data_mesgs['session']  → flat assoc array  ['sport' => 2, 'start_time' => 1744070000, ...]
  *   - data_mesgs['record']   → columnar:          ['timestamp' => [0=>ts1,1=>ts2,...], 'heart_rate' => [ts1=>120, ts2=>121,...], ...]
  *   - data_mesgs['lap']      → columnar:          ['timestamp' => [0=>ts1,1=>ts2,...], 'total_elapsed_time' => [0=>3600, 1=>1800,...], ...]
- *   Single-element arrays are automatically flattened to scalars by oneElementArrays().
+ *   Single-element arrays in session/lap are flattened to scalars by oneElementArrays(); record fields remain arrays.
  *   Timestamps are Unix epoch (library adds FIT_UNIX_TS_DIFF = 631065600 by default).
  */
 class FitParserService {
@@ -48,7 +48,7 @@ class FitParserService {
             throw new Exception("FIT file not found: $filePath");
         }
 
-        $fit     = new phpFITFileAnalysis($filePath, ['fix_data' => ['all'], 'units' => 'metric']);
+        $fit     = $this->loadFit($filePath);
         $session = $fit->data_mesgs['session'] ?? [];
         $sport   = $this->detectSport($fit, $session);
         $startTime = $this->resolveStartTime($fit, $session);
@@ -76,7 +76,7 @@ class FitParserService {
      * Return raw parsed data for debugging.
      */
     public function debugDump(string $filePath): array {
-        $fit     = new phpFITFileAnalysis($filePath, ['fix_data' => ['all'], 'units' => 'metric']);
+        $fit     = $this->loadFit($filePath);
         $session = $fit->data_mesgs['session'] ?? [];
         $records = $fit->data_mesgs['record']  ?? [];
         $tsList  = $records['timestamp'] ?? [];
@@ -243,6 +243,17 @@ class FitParserService {
         }
 
         return $laps;
+    }
+
+    private function loadFit(string $filePath): phpFITFileAnalysis {
+        try {
+            return new phpFITFileAnalysis($filePath, ['fix_data' => ['all'], 'units' => 'metric']);
+        } catch (\Throwable $e) {
+            // Some FIT files have a single cadence/timestamp record; the library collapses it to
+            // a scalar which crashes fixData() (PHP 8 TypeError on count/ksort of non-array).
+            // Omitting fix_data causes fixData() to early-return before touching any record field.
+            return new phpFITFileAnalysis($filePath, ['units' => 'metric']);
+        }
     }
 
     private function parseTrackpoints(phpFITFileAnalysis $fit): array {
