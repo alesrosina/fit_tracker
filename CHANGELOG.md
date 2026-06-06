@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.4]
+
+### Fixed
+- FIT file import no longer fails on Nextcloud 33 — activity and lap timestamps are now stored in `Y-m-d H:i:s` format instead of ISO 8601 (`T`/`Z`), which MySQL strict mode rejects
+- Week charts now display dates in DD.MM. order instead of MM.DD.
+
 ## [1.1.3]
 
 ### Added
