@@ -168,12 +168,12 @@ class FitParserService {
         }
 
         if ($ts === null) {
-            return (new \DateTime('now', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i:s\Z');
+            return (new \DateTime('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
         }
 
         // Timestamps are already Unix epoch (library adds FIT_UNIX_TS_DIFF by default)
         if (is_int($ts) || ctype_digit((string) $ts)) {
-            return (new \DateTime('@' . (int) $ts))->format('Y-m-d\TH:i:s\Z');
+            return (new \DateTime('@' . (int) $ts))->format('Y-m-d H:i:s');
         }
 
         return (string) $ts;
@@ -214,7 +214,7 @@ class FitParserService {
 
             $startTs = $getField('start_time');
             if ($startTs !== null && (is_int($startTs) || ctype_digit((string) $startTs))) {
-                $startTs = (new \DateTime('@' . (int) $startTs))->format('Y-m-d\TH:i:s\Z');
+                $startTs = (new \DateTime('@' . (int) $startTs))->format('Y-m-d H:i:s');
             }
 
             $dur  = $getField('total_elapsed_time') ?? $getField('total_timer_time');

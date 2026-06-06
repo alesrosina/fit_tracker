@@ -140,7 +140,7 @@ export default {
                 const wd = d.toLocaleDateString(undefined, { weekday: 'short' })
                 const mm = String(d.getMonth() + 1).padStart(2, '0')
                 const dd = String(d.getDate()).padStart(2, '0')
-                return `${wd} ${mm}.${dd}.`
+                return `${wd} ${dd}.${mm}.`
             })
 
             const byDay = days.map(d => this.activities.filter(a => {
