@@ -72,14 +72,12 @@
             <ActivityMap
                 v-if="hasGps"
                 :trackpoints="trackpoints"
-                :photos="photos"
-                class="section"
+                :photos="sortedPhotos"
             />
             <!-- Photos (GPS-tagged images matched to the route, any sport) -->
             <ActivityPhotos
-                v-if="photos.length > 0"
-                :photos="photos"
-                class="section"
+                v-if="sortedPhotos.length > 0"
+                :photos="sortedPhotos"
                 @open-photo="openLightbox"
             />
 
@@ -88,11 +86,10 @@
                 v-if="trackpoints.length > 0"
                 :trackpoints="trackpoints"
                 :sport="activity.sport"
-                class="section"
             />
 
             <!-- Laps table -->
-            <div v-if="laps.length > 0" class="section">
+            <div v-if="laps.length > 0">
                 <h3>Laps</h3>
                 <table class="laps-table">
                     <thead>
@@ -107,35 +104,25 @@
                     </thead>
                     <tbody>
                         <tr v-for="lap in laps" :key="lap.id">
-                            <td>{{ lap.lapNumber }}</td>
-                            <td>{{ lap.distance ? formatDistance(lap.distance) : '–' }}</td>
-                            <td>{{ lap.duration ? formatDuration(lap.duration) : '–' }}</td>
-                            <td>{{ lapPaceOrSpeed(lap) }}</td>
-                            <td>{{ lap.avgHr ? lap.avgHr + ' bpm' : '–' }}</td>
-                            <td>{{ lap.elevationGain ? '+' + Math.round(lap.elevationGain) + ' m' : '–' }}</td>
+                            <td data-label="#">{{ lap.lapNumber }}</td>
+                            <td data-label="Distance">{{ lap.distance ? formatDistance(lap.distance) : '–' }}</td>
+                            <td data-label="Duration">{{ lap.duration ? formatDuration(lap.duration) : '–' }}</td>
+                            <td data-label="Pace / Speed">{{ lapPaceOrSpeed(lap) }}</td>
+                            <td data-label="Avg HR">{{ lap.avgHr ? lap.avgHr + ' bpm' : '–' }}</td>
+                            <td data-label="Elevation">{{ lap.elevationGain ? '+' + Math.round(lap.elevationGain) + ' m' : '–' }}</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
         </template>
 
-        <!-- Photo lightbox (NcModal fallback when OCA.Viewer is unavailable) -->
-        <NcModal
-            v-if="lightboxPhoto"
-            size="large"
-            :name="lightboxPhoto.name"
-            @close="lightboxPhoto = null"
-        >
-            <template #default>
-                <div class="lightbox-body">
-                    <img
-                        :src="lightboxPreviewUrl"
-                        :alt="lightboxPhoto.name"
-                        class="lightbox-img"
-                    />
-                </div>
-            </template>
-        </NcModal>
+        <!-- Fullscreen photo gallery -->
+        <PhotoLightbox
+            v-if="lightboxIndex !== null"
+            :photos="sortedPhotos"
+            :start-index="lightboxIndex"
+            @close="lightboxIndex = null"
+        />
 
         <ShareCard
             v-if="showShare"
@@ -150,7 +137,6 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { defineAsyncComponent } from 'vue'
-import { NcModal } from '@nextcloud/vue'
 import { sportIcon as getSportIcon, SPEED_NOT_PACE_SPORTS } from '../sports.js'
 
 export default {
@@ -159,8 +145,8 @@ export default {
         ActivityMap:    defineAsyncComponent(() => import('./ActivityMap.vue')),
         ActivityCharts: defineAsyncComponent(() => import('./ActivityCharts.vue')),
         ActivityPhotos: defineAsyncComponent(() => import('./ActivityPhotos.vue')),
+        PhotoLightbox:  defineAsyncComponent(() => import('./PhotoLightbox.vue')),
         ShareCard:      defineAsyncComponent(() => import('./ShareCard.vue')),
-        NcModal,
     },
     props: { id: { type: String, required: true } },
     data() {
@@ -171,11 +157,18 @@ export default {
             photos: [],
             loading: true,
             error: null,
-            lightboxPhoto: null,
+            lightboxIndex: null,
             showShare: false,
         }
     },
     computed: {
+        sortedPhotos() {
+            return [...this.photos].sort((a, b) => {
+                if (!a.takenAt) return 1
+                if (!b.takenAt) return -1
+                return new Date(a.takenAt.replace(' ', 'T')) - new Date(b.takenAt.replace(' ', 'T'))
+            })
+        },
         sportIcon() {
             return getSportIcon(this.activity?.sport)
         },
@@ -211,14 +204,10 @@ export default {
             const s = Math.round((minPerKm - m) * 60)
             return `${m}:${String(s).padStart(2, '0')} /km`
         },
-        lightboxPreviewUrl() {
-            if (!this.lightboxPhoto) return ''
-            return generateUrl(`/core/preview?fileId=${this.lightboxPhoto.fileId}&x=2000&y=2000&a=1`)
-        },
     },
     async mounted() {
         await this.load()
-        this._photoOpenHandler = (e) => this.openLightbox(e.detail)
+        this._photoOpenHandler = (e) => this.openLightboxByFileId(e.detail.fileId)
         document.addEventListener('fit-photo-open', this._photoOpenHandler)
     },
     unmounted() {
@@ -247,8 +236,12 @@ export default {
                 this.loading = false
             }
         },
-        openLightbox(photo) {
-            this.lightboxPhoto = photo
+        openLightbox(index) {
+            this.lightboxIndex = index
+        },
+        openLightboxByFileId(fileId) {
+            const index = this.sortedPhotos.findIndex(p => p.fileId === fileId)
+            if (index !== -1) this.lightboxIndex = index
         },
         async loadPhotos() {
             try {
@@ -376,8 +369,6 @@ export default {
     font-size: 20px;
     font-weight: 600;
 }
-.section { margin-bottom: 32px; }
-.section h3 { margin-bottom: 12px; }
 .laps-table {
     width: 100%;
     border-collapse: collapse;
@@ -389,19 +380,31 @@ export default {
     border-bottom: 1px solid var(--color-border);
 }
 .laps-table th { font-weight: 600; color: var(--color-text-maxcontrast); }
+@media (max-width: 600px) {
+    .laps-table thead { display: none; }
+    .laps-table, .laps-table tbody, .laps-table tr, .laps-table td {
+        display: block;
+        width: 100%;
+    }
+    .laps-table tr {
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        padding: 4px 12px;
+    }
+    .laps-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        border-bottom: none;
+    }
+    .laps-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--color-text-maxcontrast);
+        margin-right: 12px;
+    }
+}
 .loading, .error { padding: 40px; text-align: center; }
 .error { color: var(--color-error); }
-.lightbox-body {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 16px;
-    min-height: 300px;
-}
-.lightbox-img {
-    max-width: 100%;
-    max-height: 80vh;
-    object-fit: contain;
-    border-radius: 4px;
-}
 </style>

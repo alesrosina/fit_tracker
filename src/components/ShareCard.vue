@@ -36,7 +36,7 @@ export default {
             const color = sportColor(this.activity.sport)
 
             this.drawBackground(ctx, color)
-            this.drawHeader(ctx)
+            await this.drawHeader(ctx)
 
             const coords = this.trackpoints
                 .filter(tp => tp.lat !== null && tp.lon !== null)
@@ -122,6 +122,17 @@ export default {
 
             return true
         },
+        loadEmojiImage(emoji, px) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}">`
+                + `<text x="50%" y="53%" font-size="${px * 0.82}" text-anchor="middle" dominant-baseline="central">${emoji}</text>`
+                + `</svg>`
+            return new Promise(resolve => {
+                const img = new Image()
+                img.onload = () => resolve(img)
+                img.onerror = () => resolve(null)
+                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
+            })
+        },
         loadTileImage(url) {
             return new Promise(resolve => {
                 const img = new Image()
@@ -176,12 +187,17 @@ export default {
             ctx.fillStyle = grad
             ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
         },
-        drawHeader(ctx) {
+        async drawHeader(ctx) {
             const cx = CANVAS_W / 2
             ctx.textAlign = 'center'
 
-            ctx.font = '120px sans-serif'
-            ctx.fillText(sportIcon(this.activity.sport), cx, 175)
+            // Canvas 2D's fillText() unreliably renders color emoji (esp. Apple
+            // Color Emoji on iOS Safari — glyphs silently fail to paint). Rendering
+            // the emoji as SVG text and drawing the rasterized result instead routes
+            // it through the normal, reliable HTML/SVG text-layout engine.
+            const iconSize = 140
+            const iconImg = await this.loadEmojiImage(sportIcon(this.activity.sport), iconSize)
+            if (iconImg) ctx.drawImage(iconImg, cx - iconSize / 2, 45, iconSize, iconSize)
 
             ctx.fillStyle = '#ffffff'
             ctx.font = '600 44px -apple-system, "Segoe UI", Roboto, sans-serif'

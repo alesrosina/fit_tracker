@@ -29,6 +29,10 @@ export default {
     mounted() {
         this.$nextTick(() => this.initMap())
     },
+    beforeUnmount() {
+        window.removeEventListener('keydown', this.onCtrlZoomKeyDown)
+        window.removeEventListener('keyup', this.onCtrlZoomKeyUp)
+    },
     methods: {
         initMap() {
             const coords = this.trackpoints
@@ -37,7 +41,8 @@ export default {
 
             if (coords.length === 0) return
 
-            this.map = L.map(this.$refs.mapEl)
+            this.map = L.map(this.$refs.mapEl, { scrollWheelZoom: false })
+            this.setupCtrlScrollZoom()
 
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -66,6 +71,22 @@ export default {
             if (this.photos.length > 0) {
                 this.addPhotoMarkers(this.photos)
             }
+        },
+        setupCtrlScrollZoom() {
+            this.onCtrlZoomKeyDown = (e) => {
+                if (e.key === 'Control' || e.key === 'Meta') this.map.scrollWheelZoom.enable()
+            }
+            this.onCtrlZoomKeyUp = (e) => {
+                if (e.key === 'Control' || e.key === 'Meta') this.map.scrollWheelZoom.disable()
+            }
+            window.addEventListener('keydown', this.onCtrlZoomKeyDown)
+            window.addEventListener('keyup', this.onCtrlZoomKeyUp)
+
+            this.$refs.mapEl.addEventListener('wheel', (e) => {
+                if (!e.ctrlKey && !e.metaKey) return
+                e.preventDefault()
+                this.map.scrollWheelZoom.enable()
+            }, { passive: false })
         },
         addPhotoMarkers(photos) {
             const clusters = this.clusterPhotos(photos, 50)

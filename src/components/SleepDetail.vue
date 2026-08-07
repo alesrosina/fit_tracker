@@ -50,7 +50,7 @@
             </div>
 
             <!-- Stage distribution bar -->
-            <div v-if="hasStages" class="section stage-section">
+            <div v-if="hasStages">
                 <h3>Stage Distribution</h3>
                 <SleepStageBar
                     :timeDeep="session.timeDeep"
@@ -68,7 +68,7 @@
             </div>
 
             <!-- Sleep stages timeline -->
-            <div v-if="stages.length > 0" class="section">
+            <div v-if="stages.length > 0">
                 <h3>Sleep Timeline</h3>
                 <div class="timeline">
                     <div class="timeline__track">
@@ -313,10 +313,7 @@ export default {
     font-weight: 600;
 }
 .stat__unit { font-size: 13px; font-weight: 400; }
-.section { margin-bottom: 32px; }
-.section h3 { margin-bottom: 12px; }
 /* Stage distribution bar */
-.stage-section {}
 .dist-bar { height: 16px; border-radius: 8px; }
 .stage-legend {
     display: flex;

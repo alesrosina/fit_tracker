@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.8]
+
+### Fixed
+- Some UI fixes: the photo viewer is now a full-screen gallery with swipe/arrow-key/prev-next navigation between an activity's photos, the activity map no longer hijacks page scrolling (zoom now needs Ctrl/Cmd + scroll), the share card's sport emoji now renders correctly on iOS Safari, and the laps table and chart layout are more usable on narrow screens
+
+### Changed
+- README and app store description updated to reflect the full sport list, the Share button, GPS-based photo matching for any sport, the monthly sleep chart, nap detection, and the "Re-check sport types" settings tool
+
 ## [1.1.7]
 
 ### Added
