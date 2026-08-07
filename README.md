@@ -15,13 +15,15 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 
 ### Activity tracking
 
-- **Supported sports:** Running, Cycling, Hiking, Swimming, Gym, Breathwork, Meditation, Skiing
+- **Supported sports:** the full Garmin FIT sport list — Running, Cycling, Hiking, Walking, Swimming, Gym, Breathwork, Meditation, Skiing, and dozens more (sailing, golf, rowing, kayaking, tennis, climbing, ...). Sports without a dedicated icon still import fine with a generic icon and a title-cased label
 - **Dashboard** shows a monthly activity calendar and a last-7-days bar chart
+- **Sidebar navigation** only lists the sport types (and Sleep) you actually have imported activities for
 - **Activity cards** display distance, duration, average heart rate, and calories
+- **Share button** on the activity detail page generates a shareable image card (route map + key stats) for the activity
 - **Detail view** per activity includes:
-  - Key stats (distance, pace, heart rate, elevation, calories, cadence)
+  - Key stats (distance, pace or speed depending on sport, heart rate, elevation, calories, cadence)
   - Interactive Leaflet map with GPS route and 📷 photo pins
-  - Photos taken along the route (cycling & hiking) shown as a thumbnail strip and as clickable map pins — only GPS-tagged JPEG photos stored in Nextcloud are matched, within 200 m of the track
+  - Photos taken along the route, shown as a thumbnail strip and as clickable map pins for any activity with a GPS track — only GPS-tagged JPEG photos stored in Nextcloud are matched, within 200 m of the track
   - Elevation profile chart
   - Heart rate chart
   - Lap table with per-lap pace/speed, heart rate and distance
@@ -29,7 +31,8 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 ### Sleep tracking
 
 - Automatically detects and separates Garmin sleep `.fit` files from activity files
-- **Sleep list** shows all recorded sleep sessions with a **last-7-nights stacked bar chart** (Deep / REM / Light / Awake)
+- Detected daytime naps are also imported as short sleep sessions
+- **Sleep list** shows all recorded sleep sessions with a **monthly stacked bar chart** (Deep / REM / Light / Awake), with previous/next navigation between months
 - **Dashboard widget** on the main activity page shows your last sleep session with duration, score, HRV and a stage distribution bar
 - **Detail view** per sleep session includes:
   - Key stats: total duration, sleep score (0–100), HRV score, time in each stage
@@ -41,6 +44,7 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 
 - Choose any folder in your Nextcloud as the source for `.fit` files
 - Re-sync is triggered automatically on folder save or manual navigation
+- **Re-check sport types** button reclassifies already-imported activities under the current sport detection logic, and moves any that turn out to be sleep/nap files over to Sleep
 
 ---
 
