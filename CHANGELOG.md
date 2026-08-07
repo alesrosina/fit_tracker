@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.1.7]
+
+### Added
+- Activity detail page has a Share button that generates a shareable image card (route map, stats) for the activity
+- Full Garmin FIT sport enum is now recognized — sailing, golf, rowing, kayaking, tennis, and dozens of other sports import with their correct type instead of being misdetected as running or gym
+- Detected daytime naps are now imported as short sleep sessions
+- Settings page has a "Re-check sport types" button to reclassify already-imported activities under the current sport detection logic, including moving mis-imported activities to Sleep
+- Sleep list shows a month view with previous/next navigation instead of a fixed last-7-nights chart
+
+### Changed
+- Sidebar navigation only lists sport types (and Sleep) that actually have imported data, instead of a fixed list
+- Photos are now matched to any activity with GPS data, not just cycling and hiking
+- Speed vs. pace display is now chosen per sport (e.g. sailing, boating, kayaking show km/h) instead of a hardcoded cycling/skiing check
+
+### Fixed
+- Activities with no identifiable sport or GPS data are now skipped during import instead of being guessed as "gym"
+
 ## [1.1.6]
 
 ### Fixed
