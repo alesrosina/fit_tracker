@@ -91,6 +91,7 @@ import ActivityCalendar from './ActivityCalendar.vue'
 import ActivityWeekChart from './ActivityWeekChart.vue'
 import SleepStageBar from './SleepStageBar.vue'
 import { sportIcon as getSportIcon, sportLabel } from '../sports.js'
+import { setActivities, setSleep } from '../store/navData.js'
 
 export default {
     name: 'ActivityList',
@@ -153,6 +154,8 @@ export default {
                 this.syncErrors  = actRes.data.syncErrors  ?? []
                 const sessions   = sleepRes?.data?.sessions ?? []
                 this.lastSleep   = sessions.length > 0 ? sessions[0] : null
+                setActivities(this.activities)
+                setSleep(sessions)
             } catch (e) {
                 this.error = 'Failed to load activities'
             } finally {

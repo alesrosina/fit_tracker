@@ -1,5 +1,10 @@
 <template>
-    <div class="sleep-week-chart">
+    <div class="sleep-month-chart">
+        <div class="sleep-month-chart__header">
+            <button class="pagination__btn" @click="monthOffset--">&#8592;</button>
+            <span class="sleep-month-chart__title">{{ monthTitle }}</span>
+            <button class="pagination__btn" :disabled="!canGoForward" @click="monthOffset++">&#8594;</button>
+        </div>
         <canvas ref="canvas"></canvas>
     </div>
 </template>
@@ -9,15 +14,30 @@ import { Chart, BarController, BarElement, LinearScale, CategoryScale, Tooltip, 
 Chart.register(BarController, BarElement, LinearScale, CategoryScale, Tooltip, Legend)
 
 export default {
-    name: 'SleepWeekChart',
+    name: 'SleepMonthChart',
     props: {
         sessions: { type: Array, required: true },
     },
     data() {
-        return { chart: null }
+        return { chart: null, monthOffset: 0 }
+    },
+    computed: {
+        viewedDate() {
+            const d = new Date()
+            d.setDate(1)
+            d.setMonth(d.getMonth() + this.monthOffset)
+            return d
+        },
+        canGoForward() {
+            return this.monthOffset < 0
+        },
+        monthTitle() {
+            return this.viewedDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        },
     },
     watch: {
         sessions() { this.rebuild() },
+        monthOffset() { this.rebuild() },
     },
     mounted() {
         this.$nextTick(() => this.rebuild())
@@ -28,7 +48,7 @@ export default {
     methods: {
         rebuild() {
             this.chart?.destroy()
-            const { labels, datasets, scoreData } = this.last7Days()
+            const { labels, datasets, scoreData, hrvData } = this.buildMonthData()
             this.chart = new Chart(this.$refs.canvas, {
                 type: 'bar',
                 data: { labels, datasets },
@@ -59,7 +79,7 @@ export default {
                                 afterBody: (items) => {
                                     const idx = items[0]?.dataIndex
                                     const score = scoreData[idx]
-                                    const hrv = this.last7Days().hrvData[idx]
+                                    const hrv = hrvData[idx]
                                     const lines = []
                                     if (score) lines.push(`Sleep score: ${score}/100`)
                                     if (hrv)   lines.push(`HRV: ${hrv}`)
@@ -72,7 +92,7 @@ export default {
                         x: {
                             stacked: true,
                             grid: { display: false },
-                            ticks: { font: { size: 11 } },
+                            ticks: { font: { size: 11 }, autoSkip: true, maxRotation: 0 },
                         },
                         y: {
                             stacked: true,
@@ -91,19 +111,13 @@ export default {
                 },
             })
         },
-        last7Days() {
-            const today = new Date()
-            const days = Array.from({ length: 7 }, (_, i) => {
-                const d = new Date(today)
-                d.setDate(today.getDate() - (6 - i))
-                return d
-            })
-            const labels = days.map(d => {
-                const wd = d.toLocaleDateString(undefined, { weekday: 'short' })
-                const mm = String(d.getMonth() + 1).padStart(2, '0')
-                const dd = String(d.getDate()).padStart(2, '0')
-                return `${wd} ${dd}.${mm}.`
-            })
+        buildMonthData() {
+            const year  = this.viewedDate.getFullYear()
+            const month = this.viewedDate.getMonth()
+            const dayCount = new Date(year, month + 1, 0).getDate()
+            const days = Array.from({ length: dayCount }, (_, i) => new Date(year, month, i + 1))
+
+            const labels = days.map(d => String(d.getDate()))
 
             const scoreData = []
             const hrvData   = []
@@ -151,7 +165,35 @@ export default {
 </script>
 
 <style scoped>
-.sleep-week-chart {
+.sleep-month-chart {
     width: 100%;
 }
+.sleep-month-chart__header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+.sleep-month-chart__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-maxcontrast);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    min-width: 160px;
+    text-align: center;
+}
+.pagination__btn {
+    background: var(--color-main-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    padding: 6px 14px;
+    cursor: pointer;
+    font-size: 16px;
+    color: var(--color-main-text);
+    transition: background 0.15s;
+}
+.pagination__btn:hover:not(:disabled) { background: var(--color-background-dark); }
+.pagination__btn:disabled { opacity: 0.4; cursor: default; }
 </style>

@@ -107,6 +107,19 @@ class ActivityController extends Controller {
     }
 
     #[NoAdminRequired]
+    public function repairSport(): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        try {
+            return new DataResponse($this->activityService->repairSportTypes($userId));
+        } catch (\Throwable $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[NoAdminRequired]
     public function destroy(int $id): DataResponse {
         $userId = $this->getUserId();
         if ($userId === null) {

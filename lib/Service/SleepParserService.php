@@ -9,18 +9,24 @@ use Exception;
 /**
  * Parses Garmin sleep FIT files (not supported by phpFITFileAnalysis).
  *
- * Key FIT global message numbers used by Garmin sleep files:
+ * Key FIT global message numbers used by Garmin sleep files (per Garmin's
+ * FIT SDK Profile.xlsx — https://github.com/garmin/fit-sdk-tools):
  *   275 (0x0113) – sleep_level:       field 253=timestamp, field 0=stage (0=unmeasurable,1=awake,2=light,3=deep,4=rem)
  *   346 (0x015A) – sleep_assessment:  field 6=overall_score (0-100)
  *   521 (0x0209) – sleep_stats:       field 1=hrv_score
+ *   412 (0x019C) – nap_event:         field 0=start_time, 2=end_time, 5=is_deleted
  *
- * Detection: a FIT file is a sleep file if it contains a definition for global message 275.
+ * Detection: a FIT file is a (night) sleep file if it contains a definition for
+ * global message 275. Garmin also emits separate, much smaller FIT files for
+ * detected daytime naps (message 412) — these carry no sleep_level stages and
+ * are handled via isNapFile()/parseNap().
  */
 class SleepParserService {
 
     private const SLEEP_LEVEL_MSG      = 275;
     private const SLEEP_ASSESSMENT_MSG = 346;
     private const SLEEP_STATS_MSG      = 521;
+    private const NAP_EVENT_MSG        = 412;
     private const FIT_EPOCH            = 631065600; // seconds between 1970-01-01 and 1989-12-31
 
     private const STAGE_MAP = [
@@ -37,6 +43,19 @@ class SleepParserService {
     public function isSleepFile(string $filePath): bool {
         $messages = $this->parseBinary($filePath);
         return isset($messages[self::SLEEP_LEVEL_MSG]) && count($messages[self::SLEEP_LEVEL_MSG]) > 0;
+    }
+
+    /**
+     * Check whether a FIT file is a (non-dismissed) detected-nap file.
+     * Naps dismissed on-device (is_deleted=1) are not treated as real naps.
+     */
+    public function isNapFile(string $filePath): bool {
+        $messages = $this->parseBinary($filePath);
+        $napMsgs  = $messages[self::NAP_EVENT_MSG] ?? [];
+        if (empty($napMsgs)) {
+            return false;
+        }
+        return empty($napMsgs[0][5]); // field 5 = is_deleted
     }
 
     /**
@@ -140,6 +159,62 @@ class SleepParserService {
         ];
     }
 
+    /**
+     * Parse a detected-nap FIT file (global message 412) and return it in the
+     * same shape as parse(), since naps are stored as short Sleep records.
+     * Naps have no sleep_level stages, so score/hrv_score/stage totals are empty.
+     *
+     * @return array{
+     *   name: string,
+     *   start_time: string,
+     *   end_time: string,
+     *   duration: int,
+     *   score: ?int,
+     *   hrv_score: ?int,
+     *   time_deep: int,
+     *   time_light: int,
+     *   time_rem: int,
+     *   time_awake: int,
+     *   stages: array,
+     * }
+     */
+    public function parseNap(string $filePath): array {
+        if (!file_exists($filePath)) {
+            throw new Exception("FIT file not found: $filePath");
+        }
+
+        $messages = $this->parseBinary($filePath);
+        $nap      = $messages[self::NAP_EVENT_MSG][0] ?? [];
+
+        $startRaw = $nap[0] ?? null; // start_time
+        $endRaw   = $nap[2] ?? null; // end_time
+
+        $startTime = $startRaw !== null ? $this->fitTimestamp($startRaw) : (new \DateTime('now', new \DateTimeZone('UTC')))->format('Y-m-d H:i:s');
+        $endTime   = $endRaw   !== null ? $this->fitTimestamp($endRaw)   : $startTime;
+        $duration  = ($startRaw !== null && $endRaw !== null) ? ($endRaw - $startRaw) : 0;
+
+        try {
+            $dt   = new \DateTime($startTime);
+            $name = 'Nap – ' . $dt->format('d M Y');
+        } catch (\Exception) {
+            $name = 'Nap';
+        }
+
+        return [
+            'name'       => $name,
+            'start_time' => $startTime,
+            'end_time'   => $endTime,
+            'duration'   => $duration,
+            'score'      => null,
+            'hrv_score'  => null,
+            'time_deep'  => 0,
+            'time_light' => 0,
+            'time_rem'   => 0,
+            'time_awake' => 0,
+            'stages'     => [],
+        ];
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Internal binary parser
     // ─────────────────────────────────────────────────────────────────────────
@@ -160,7 +235,7 @@ class SleepParserService {
         $definitions = []; // local_type => ['global', 'fields' => [['def','size']], 'recordSize', 'isLE']
         $messages    = []; // globalMsgNum => [[defNum => value, ...], ...]
 
-        $interesting = [self::SLEEP_LEVEL_MSG, self::SLEEP_ASSESSMENT_MSG, self::SLEEP_STATS_MSG];
+        $interesting = [self::SLEEP_LEVEL_MSG, self::SLEEP_ASSESSMENT_MSG, self::SLEEP_STATS_MSG, self::NAP_EVENT_MSG];
 
         while ($pos < $len - 2) {
             $hdr = ord($raw[$pos]);

@@ -47,6 +47,17 @@
                     <div v-if="saveError" class="error">{{ saveError }}</div>
                     <div v-if="saveSuccess" class="success">Settings saved.</div>
 
+                    <div class="repair-section">
+                        <label>Fix sport labels on already-imported activities</label>
+                        <NcButton @click="repairSportTypes" :disabled="repairing" type="secondary">
+                            {{ repairing ? 'Re-checking…' : 'Re-check sport types' }}
+                        </NcButton>
+                        <div v-if="repairError" class="error">{{ repairError }}</div>
+                        <div v-if="repairResult" class="success">
+                            Checked {{ repairResult.checked }}, updated {{ repairResult.sportUpdated }}, moved to sleep {{ repairResult.movedToSleep }}, still unrecognized {{ repairResult.stillUnrecognized }}.
+                        </div>
+                    </div>
+
                     <div class="settings-actions">
                         <NcButton @click="showSettings = false" type="tertiary">Close</NcButton>
                         <NcButton @click="saveConfig" :disabled="saving || !folderPath" type="primary">Save</NcButton>
@@ -62,7 +73,8 @@ import { NcContent, NcAppNavigation, NcAppNavigationItem, NcAppContent, NcModal,
 import { getFilePickerBuilder, FilePickerType } from '@nextcloud/dialogs'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
-import { SPORTS } from './sports.js'
+import { SPORTS, SPORT_MAP, sportIcon, sportLabel } from './sports.js'
+import { navData } from './store/navData.js'
 
 export default {
     name: 'App',
@@ -74,17 +86,32 @@ export default {
             saving: false,
             saveError: null,
             saveSuccess: false,
-            sports: [
-                { value: 'all',   label: 'All Activities', icon: '🏅' },
-                ...SPORTS,
-                { value: 'sleep', label: 'Sleep',          icon: '🛌' },
-            ],
+            repairing: false,
+            repairError: null,
+            repairResult: null,
         }
     },
     computed: {
         currentSport() {
             if (this.$route.path.startsWith('/sleep')) return 'sleep'
             return this.$route.query.sport || 'all'
+        },
+        // Only show nav entries for sport types (and Sleep) that actually
+        // exist among what's been imported — ActivityList/SleepList publish
+        // their loaded data into the shared navData store as they fetch it.
+        sports() {
+            const present = new Set(navData.activities.map(a => a.sport))
+            const curated = SPORTS.filter(s => present.has(s.value))
+            const extra   = [...present]
+                .filter(v => !SPORT_MAP[v])
+                .sort()
+                .map(v => ({ value: v, label: sportLabel(v), icon: sportIcon(v) }))
+
+            const list = [{ value: 'all', label: 'All Activities', icon: '🏅' }, ...curated, ...extra]
+            if (navData.sleep.length > 0) {
+                list.push({ value: 'sleep', label: 'Sleep', icon: '🛌' })
+            }
+            return list
         },
     },
     methods: {
@@ -138,6 +165,20 @@ export default {
                 this.saving = false
             }
         },
+        async repairSportTypes() {
+            this.repairing = true
+            this.repairError = null
+            this.repairResult = null
+            try {
+                const { data } = await axios.post(generateUrl('/apps/fit_tracker/api/activities/repair-sport'))
+                this.repairResult = data
+                window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
+            } catch (e) {
+                this.repairError = e.response?.data?.error ?? 'Failed to re-check sport types'
+            } finally {
+                this.repairing = false
+            }
+        },
     },
 }
 </script>
@@ -171,6 +212,13 @@ export default {
     white-space: nowrap;
 }
 .folder-path:not(:empty) { color: var(--color-main-text); }
+.repair-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 8px;
+    border-top: 1px solid var(--color-border);
+}
 .settings-actions {
     display: flex;
     gap: 8px;

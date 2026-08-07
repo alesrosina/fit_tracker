@@ -14,6 +14,7 @@ return [
         ['name' => 'activity#trackpoints', 'url' => '/api/activities/{id}/trackpoints', 'verb' => 'GET'],
         ['name' => 'activity#laps',        'url' => '/api/activities/{id}/laps',        'verb' => 'GET'],
         ['name' => 'activity#photos', 'url' => '/api/activities/{id}/photos', 'verb' => 'GET'],
+        ['name' => 'activity#repair_sport', 'url' => '/api/activities/repair-sport', 'verb' => 'POST'],
 
         // Sleep API
         ['name' => 'sleep#index',   'url' => '/api/sleep',             'verb' => 'GET'],

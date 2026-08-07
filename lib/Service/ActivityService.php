@@ -11,7 +11,9 @@ use OCA\FitTracker\Db\Lap;
 use OCA\FitTracker\Db\LapMapper;
 use OCA\FitTracker\Db\TrackpointMapper;
 use OCA\FitTracker\Service\SleepParserService;
+use OCA\FitTracker\Service\SleepService;
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
@@ -25,6 +27,7 @@ class ActivityService {
         private TrackpointMapper  $trackpointMapper,
         private FitParserService  $fitParser,
         private SleepParserService $sleepParser,
+        private SleepService      $sleepService,
         private IRootFolder       $rootFolder,
         private IConfig           $config,
     ) {}
@@ -119,8 +122,11 @@ class ActivityService {
                 continue;
             }
             try {
-                $this->importFile($userId, $file, $relativePath);
-                $stats['imported']++;
+                if ($this->importFile($userId, $file, $relativePath)) {
+                    $stats['imported']++;
+                } else {
+                    $stats['skipped']++;
+                }
             } catch (\Exception $e) {
                 $stats['errors'][] = $file->getName() . ': ' . $e->getMessage();
             }
@@ -181,6 +187,79 @@ class ActivityService {
         $this->activityMapper->deleteForUser($id, $userId);
     }
 
+    /**
+     * Re-parse every existing activity's underlying FIT file against the
+     * current sport-detection logic and fix up rows that were mis-classified
+     * under an older version of it (e.g. a sailing file tagged "running", or
+     * a nap file that was imported as a "gym" activity before nap detection
+     * existed). Does not touch files that still can't be identified.
+     *
+     * Returns ['checked' => int, 'sportUpdated' => int, 'movedToSleep' => int,
+     *          'stillUnrecognized' => int, 'errors' => string[]]
+     */
+    public function repairSportTypes(string $userId): array {
+        $stats = ['checked' => 0, 'sportUpdated' => 0, 'movedToSleep' => 0, 'stillUnrecognized' => 0, 'errors' => []];
+        $userFolder = $this->rootFolder->getUserFolder($userId);
+
+        foreach ($this->activityMapper->findAllForUser($userId) as $activity) {
+            $stats['checked']++;
+
+            try {
+                $file = $userFolder->get($activity->getFitFilePath());
+            } catch (NotFoundException) {
+                $stats['errors'][] = $activity->getName() . ': FIT file not found';
+                continue;
+            }
+            if (!($file instanceof File)) {
+                $stats['errors'][] = $activity->getName() . ': path is not a file';
+                continue;
+            }
+
+            $tmpPath = tempnam(sys_get_temp_dir(), 'fit_repair_');
+            try {
+                file_put_contents($tmpPath, $file->getContent());
+
+                if ($this->sleepParser->isSleepFile($tmpPath) || $this->sleepParser->isNapFile($tmpPath)) {
+                    // Mis-imported as an activity before sleep/nap detection covered
+                    // this file — move it: drop the activity row, re-import as sleep.
+                    $relativePath = $activity->getFitFilePath();
+                    $this->trackpointMapper->deleteByActivity($activity->getId());
+                    $this->lapMapper->deleteByActivity($activity->getId());
+                    $this->activityMapper->deleteForUser($activity->getId(), $userId);
+                    if ($this->sleepService->importFromFile($userId, $file, $relativePath)) {
+                        $stats['movedToSleep']++;
+                    } else {
+                        $stats['errors'][] = $activity->getName() . ': failed to move to sleep';
+                    }
+                    continue;
+                }
+
+                $parsed = $this->fitParser->parse($tmpPath);
+            } catch (\Exception $e) {
+                $stats['errors'][] = $activity->getName() . ': ' . $e->getMessage();
+                continue;
+            } finally {
+                @unlink($tmpPath);
+            }
+
+            if ($parsed['sport'] === 'unknown') {
+                // Leave the existing row alone — deleting real data isn't this
+                // action's job, just flag it as still unresolved.
+                $stats['stillUnrecognized']++;
+                continue;
+            }
+
+            if ($parsed['sport'] !== $activity->getSport()) {
+                $activity->setSport($parsed['sport']);
+                $activity->setName($parsed['name']);
+                $this->activityMapper->update($activity);
+                $stats['sportUpdated']++;
+            }
+        }
+
+        return $stats;
+    }
+
     /** @return \OCP\Files\File[] */
     private function collectFitFiles(Folder $folder): array {
         $results = [];
@@ -194,16 +273,25 @@ class ActivityService {
         return $results;
     }
 
-    private function importFile(string $userId, \OCP\Files\File $file, string $relativePath): void {
+    /**
+     * Import a single file. Returns true if imported as an activity, false if
+     * skipped (a sleep/nap file handled by SleepService, or a file with no
+     * identifiable sport data).
+     */
+    private function importFile(string $userId, \OCP\Files\File $file, string $relativePath): bool {
         // Write to a temp file so FitParserService can read it
         $tmpPath = tempnam(sys_get_temp_dir(), 'fit_tracker_');
         try {
             file_put_contents($tmpPath, $file->getContent());
-            // Skip sleep files — they are handled by SleepService
-            if ($this->sleepParser->isSleepFile($tmpPath)) {
-                return;
+            // Skip sleep/nap files — they are handled by SleepService
+            if ($this->sleepParser->isSleepFile($tmpPath) || $this->sleepParser->isNapFile($tmpPath)) {
+                return false;
             }
             $parsed = $this->fitParser->parse($tmpPath);
+            // No sport/GPS signal at all — not a real activity, don't guess "gym"
+            if ($parsed['sport'] === 'unknown') {
+                return false;
+            }
         } finally {
             @unlink($tmpPath);
         }
@@ -245,5 +333,7 @@ class ActivityService {
 
         $rows = array_map(fn($tp) => array_merge(['activity_id' => $activity->getId()], $tp), $parsed['trackpoints']);
         $this->trackpointMapper->insertBulk($rows);
+
+        return true;
     }
 }

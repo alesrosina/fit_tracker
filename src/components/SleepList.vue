@@ -12,8 +12,7 @@
             </div>
 
             <div v-if="sessions.length > 0" class="week-panel">
-                <h3 class="panel-title">Last 7 Nights</h3>
-                <SleepWeekChart :sessions="sessions" />
+                <SleepMonthChart :sessions="sessions" />
             </div>
 
             <div v-if="sessions.length === 0" class="empty">
@@ -60,11 +59,12 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import SleepStageBar from './SleepStageBar.vue'
-import SleepWeekChart from './SleepWeekChart.vue'
+import SleepMonthChart from './SleepMonthChart.vue'
+import { setSleep } from '../store/navData.js'
 
 export default {
     name: 'SleepList',
-    components: { SleepStageBar, SleepWeekChart },
+    components: { SleepStageBar, SleepMonthChart },
     data() {
         return {
             sessions: [],
@@ -99,6 +99,7 @@ export default {
                 const { data } = await axios.get(generateUrl('/apps/fit_tracker/api/sleep'))
                 this.sessions   = data.sessions   ?? []
                 this.syncErrors = data.syncErrors  ?? []
+                setSleep(this.sessions)
             } catch (e) {
                 this.error = 'Failed to load sleep sessions'
             } finally {
@@ -139,14 +140,6 @@ export default {
     border-radius: 8px;
     padding: 16px;
     margin-bottom: 24px;
-}
-.panel-title {
-    margin: 0 0 12px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-text-maxcontrast);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 .sleep-grid {
     display: grid;

@@ -96,7 +96,7 @@ class SleepService {
                 continue;
             }
             try {
-                $imported = $this->importFile($userId, $file, $relativePath);
+                $imported = $this->importFromFile($userId, $file, $relativePath);
                 if ($imported) {
                     $stats['imported']++;
                 }
@@ -126,19 +126,22 @@ class SleepService {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Import a single file. Returns true if imported as sleep, false if skipped
-     * (not a sleep file).
+     * Import a single file. Returns true if imported as sleep (or a detected
+     * nap), false if skipped (neither a sleep nor a nap file). Public so
+     * ActivityService can reuse it when moving a mis-imported activity here.
      */
-    private function importFile(string $userId, \OCP\Files\File $file, string $relativePath): bool {
+    public function importFromFile(string $userId, \OCP\Files\File $file, string $relativePath): bool {
         $tmpPath = tempnam(sys_get_temp_dir(), 'fit_sleep_');
         try {
             file_put_contents($tmpPath, $file->getContent());
 
-            if (!$this->sleepParser->isSleepFile($tmpPath)) {
+            if ($this->sleepParser->isSleepFile($tmpPath)) {
+                $parsed = $this->sleepParser->parse($tmpPath);
+            } elseif ($this->sleepParser->isNapFile($tmpPath)) {
+                $parsed = $this->sleepParser->parseNap($tmpPath);
+            } else {
                 return false;
             }
-
-            $parsed = $this->sleepParser->parse($tmpPath);
         } finally {
             @unlink($tmpPath);
         }

@@ -2,7 +2,10 @@
     <div class="activity-detail">
         <div class="activity-detail__back">
             <button class="back-btn" @click="$router.push('/')">← Back</button>
-            <button v-if="activity" class="delete-btn" @click="deleteActivity">Delete</button>
+            <div v-if="activity" class="activity-detail__actions">
+                <button class="share-btn" @click="showShare = true">Share</button>
+                <button class="delete-btn" @click="deleteActivity">Delete</button>
+            </div>
         </div>
 
         <div v-if="loading" class="loading"></div>
@@ -19,11 +22,11 @@
 
             <!-- Key stats -->
             <div class="stats-grid">
-                <div v-if="effectiveAvgSpeed && ['cycling', 'running', 'skiing'].includes(activity.sport)" class="stat">
+                <div v-if="effectiveAvgSpeed && showsSpeedStat" class="stat">
                     <div class="stat__label">Avg Speed</div>
                     <div class="stat__value">{{ effectiveAvgSpeed.toFixed(1) }} km/h</div>
                 </div>
-                <div v-if="effectiveMaxSpeed && ['cycling', 'running', 'skiing'].includes(activity.sport)" class="stat">
+                <div v-if="effectiveMaxSpeed && showsSpeedStat" class="stat">
                     <div class="stat__label">Max Speed</div>
                     <div class="stat__value">{{ effectiveMaxSpeed.toFixed(1) }} km/h</div>
                 </div>
@@ -72,7 +75,7 @@
                 :photos="photos"
                 class="section"
             />
-            <!-- Photos (cycling + hiking only, GPS-tagged images on the route) -->
+            <!-- Photos (GPS-tagged images matched to the route, any sport) -->
             <ActivityPhotos
                 v-if="photos.length > 0"
                 :photos="photos"
@@ -133,6 +136,13 @@
                 </div>
             </template>
         </NcModal>
+
+        <ShareCard
+            v-if="showShare"
+            :activity="activity"
+            :trackpoints="trackpoints"
+            @close="showShare = false"
+        />
     </div>
 </template>
 
@@ -141,7 +151,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { defineAsyncComponent } from 'vue'
 import { NcModal } from '@nextcloud/vue'
-import { sportIcon as getSportIcon } from '../sports.js'
+import { sportIcon as getSportIcon, SPEED_NOT_PACE_SPORTS } from '../sports.js'
 
 export default {
     name: 'ActivityDetail',
@@ -149,6 +159,7 @@ export default {
         ActivityMap:    defineAsyncComponent(() => import('./ActivityMap.vue')),
         ActivityCharts: defineAsyncComponent(() => import('./ActivityCharts.vue')),
         ActivityPhotos: defineAsyncComponent(() => import('./ActivityPhotos.vue')),
+        ShareCard:      defineAsyncComponent(() => import('./ShareCard.vue')),
         NcModal,
     },
     props: { id: { type: String, required: true } },
@@ -161,6 +172,7 @@ export default {
             loading: true,
             error: null,
             lightboxPhoto: null,
+            showShare: false,
         }
     },
     computed: {
@@ -183,9 +195,16 @@ export default {
             if (!a) return null
             return a.maxSpeed || null
         },
+        // Sports where km/h is the natural unit (see SPEED_NOT_PACE_SPORTS), plus
+        // running — which shows both a raw speed stat and pace(min/km) below.
+        showsSpeedStat() {
+            const sport = this.activity?.sport
+            return sport === 'running' || SPEED_NOT_PACE_SPORTS.includes(sport)
+        },
         pace() {
             const a = this.activity
-            if (!a || ['gym', 'cycling', 'swimming', 'breathwork', 'meditation', 'skiing'].includes(a.sport) || !this.effectiveAvgSpeed) return null
+            if (!a || !this.effectiveAvgSpeed) return null
+            if (SPEED_NOT_PACE_SPORTS.includes(a.sport) || ['gym', 'swimming', 'breathwork', 'meditation'].includes(a.sport)) return null
             // speed is km/h → pace = 60 / speed (min/km)
             const minPerKm = 60 / this.effectiveAvgSpeed
             const m = Math.floor(minPerKm)
@@ -219,7 +238,7 @@ export default {
                 this.laps        = lapRes.data
                 this.trackpoints = tpRes.data
 
-                if (['cycling', 'hiking', 'walking'].includes(this.activity.sport)) {
+                if (this.hasGps) {
                     this.loadPhotos()
                 }
             } catch (e) {
@@ -267,7 +286,7 @@ export default {
                 speed = lap.distance / lap.duration * 3600
             }
             if (!speed) return '–'
-            if (['cycling', 'skiing'].includes(this.activity?.sport)) {
+            if (SPEED_NOT_PACE_SPORTS.includes(this.activity?.sport)) {
                 return speed.toFixed(1) + ' km/h'
             }
             // pace = 60 / speed (min/km)
@@ -297,6 +316,22 @@ export default {
     cursor: pointer;
     font-size: 14px;
     color: var(--color-primary-element);
+}
+.activity-detail__actions {
+    display: flex;
+    gap: 8px;
+}
+.share-btn {
+    background: var(--color-primary-element);
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-size: 14px;
+    color: #fff;
+    padding: 6px 14px;
+}
+.share-btn:hover {
+    background: var(--color-primary-element-hover);
 }
 .delete-btn {
     background: var(--color-element-error);

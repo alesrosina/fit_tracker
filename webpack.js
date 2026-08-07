@@ -27,6 +27,7 @@ webpackConfig.plugins = [
     ...webpackConfig.plugins,
     new MiniCssExtractPlugin({
         filename: '../css/[name].css',
+        chunkFilename: '../css/[name].[contenthash:8].css',
     }),
 ]
 

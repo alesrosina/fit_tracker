@@ -28,6 +28,7 @@
 
 <script>
 import { Chart, LineController, LineElement, PointElement, LinearScale, CategoryScale, Filler, Tooltip } from 'chart.js'
+import { SPEED_NOT_PACE_SPORTS } from '../sports.js'
 Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Filler, Tooltip)
 
 const SAMPLE_MAX = 300
@@ -101,7 +102,7 @@ export default {
             return downsample(this.resolvedSpeed, SAMPLE_MAX).map(speed => {
                 if (speed === null) return null
                 // speed is km/h; for running show pace (min/km)
-                return ['cycling', 'skiing'].includes(this.sport) ? speed : 60 / (speed || 0.001)
+                return SPEED_NOT_PACE_SPORTS.includes(this.sport) ? speed : 60 / (speed || 0.001)
             })
         },
         powerData() { return this.sampled.map(tp => tp.power) },
@@ -131,7 +132,7 @@ export default {
         hasSpeed() { return !['gym', 'breathwork', 'meditation'].includes(this.sport) && this.resolvedSpeed.some(v => v !== null) },
         hasPower() { return this.powerData.some(v => v !== null) },
         speedLabel() {
-            return ['cycling', 'skiing'].includes(this.sport) ? 'Speed (km/h)' : 'Pace (min/km)'
+            return SPEED_NOT_PACE_SPORTS.includes(this.sport) ? 'Speed (km/h)' : 'Pace (min/km)'
         },
         isRunOrCycle() {
             return this.sport === 'cycling' || this.sport === 'running'

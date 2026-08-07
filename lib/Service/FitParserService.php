@@ -107,49 +107,70 @@ class FitParserService {
     // -------------------------------------------------------------------------
 
     private function detectSport(phpFITFileAnalysis $fit, array $session): string {
-        $sportVal  = $session['sport'] ?? null;
-        $raw       = strtolower((string) $this->decodeEnum($fit, 'sport', $sportVal));
-        $sub       = strtolower((string) $this->decodeEnum($fit, 'sub_sport', $session['sub_sport'] ?? null));
+        $hasSport    = isset($session['sport']);
+        $sportId     = $hasSport ? (int) $session['sport'] : null;
+        $subSportId  = isset($session['sub_sport']) ? (int) $session['sub_sport'] : null;
+        $sport       = $sportId    !== null ? (FitSportProfile::SPORTS[$sportId]        ?? null) : null;
+        $subSport    = $subSportId !== null ? (FitSportProfile::SUB_SPORTS[$subSportId] ?? null) : null;
         // Some devices (e.g. Garmin) store a free-text sport name in the sport message
-        $sportName = strtolower((string) ($fit->data_mesgs['sport']['name'] ?? ''));
+        $sportName   = strtolower((string) ($fit->data_mesgs['sport']['name'] ?? ''));
 
-        if (str_contains($raw, 'cycl') || str_contains($raw, 'bik') || str_contains($sub, 'cycl') || str_contains($sub, 'bik') || str_contains($sportName, 'cycl') || str_contains($sportName, 'bik')) {
-            return 'cycling';
-        }
-        if (str_contains($raw, 'swim') || str_contains($sub, 'swim') || str_contains($sportName, 'swim')) {
-            return 'swimming';
-        }
-        if (str_contains($raw, 'hik') || str_contains($sub, 'hik') || str_contains($sportName, 'hik')) {
-            return 'hiking';
-        }
-        if (str_contains($raw, 'run') || str_contains($sub, 'run') || str_contains($sportName, 'run')) {
-            return 'running';
-        }
-        if (str_contains($raw, 'walk') || str_contains($sub, 'walk') || str_contains($sportName, 'walk')) {
-            return 'walking';
-        }
-        if (str_contains($raw, 'ski') || str_contains($sub, 'ski') || str_contains($sportName, 'ski')) {
-            return 'skiing';
-        }
-        if (str_contains($raw, 'yoga') || str_contains($sub, 'yoga') || str_contains($sportName, 'yoga') ||
-            str_contains($raw, 'breath') || str_contains($sub, 'breath') || str_contains($sportName, 'breath')) {
+        // App-level collapsing for the categories the UI special-cases. Driven by
+        // the authoritative FIT ids (see FitSportProfile), not substring matching,
+        // since the vendor library's own enum decoder only covers sport 0-19 and
+        // sub_sport 0-28 — anything past that (e.g. sailing=32) used to decode to
+        // 'unknown' and fall through to every check below.
+        if ($subSport === 'yoga' || $subSport === 'breathing' || str_contains($sportName, 'yoga') || str_contains($sportName, 'breath')) {
             return 'breathwork';
         }
-        if (str_contains($raw, 'meditat') || str_contains($sub, 'meditat') || str_contains($sportName, 'meditat')) {
+        if ($sport === 'meditation' || str_contains($sportName, 'meditat')) {
             return 'meditation';
         }
-        if (str_contains($raw, 'train') || str_contains($raw, 'fitness') || str_contains($raw, 'strength') || str_contains($raw, 'gym') ||
-            str_contains($sportName, 'train') || str_contains($sportName, 'fitness') || str_contains($sportName, 'strength') || str_contains($sportName, 'gym')) {
+        if (in_array($sport, ['fitness_equipment', 'training'], true) || $subSport === 'strength_training'
+            || str_contains($sportName, 'train') || str_contains($sportName, 'fitness') || str_contains($sportName, 'strength') || str_contains($sportName, 'gym')) {
             return 'gym';
         }
-
-        // Fall back: GPS present → assume running
-        $records = $fit->data_mesgs['record'] ?? [];
-        if (!empty($records['position_lat']) && !empty($records['position_long'])) {
+        if (in_array($sport, ['alpine_skiing', 'cross_country_skiing', 'snowboarding'], true) || str_contains($sportName, 'ski')) {
+            return 'skiing';
+        }
+        if ($sport === 'running' || str_contains($sportName, 'run')) {
             return 'running';
         }
+        if (in_array($sport, ['cycling', 'e_biking'], true) || str_contains($sportName, 'cycl') || str_contains($sportName, 'bik')) {
+            return 'cycling';
+        }
+        if ($sport === 'walking' || str_contains($sportName, 'walk')) {
+            return 'walking';
+        }
+        if ($sport === 'hiking' || str_contains($sportName, 'hik')) {
+            return 'hiking';
+        }
+        if ($sport === 'swimming' || str_contains($sportName, 'swim')) {
+            return 'swimming';
+        }
 
-        return 'gym';
+        // Any other resolvable, non-generic sport (sailing, golf, rowing, kayaking,
+        // tennis, ...) — return it as-is instead of forcing it into a bucket it
+        // doesn't belong to.
+        if ($sport !== null && $sport !== 'generic' && $sport !== 'all') {
+            return $sport;
+        }
+
+        // Free-text sport name present but not matched above and no usable numeric id.
+        if ($sportName !== '') {
+            return $sportName;
+        }
+
+        // sport=generic(0): a real session exists, the device just didn't specify
+        // a type. Still a real activity — import it, just generically labeled.
+        if ($sportId === 0) {
+            return 'generic';
+        }
+
+        // No session/sport data at all — this isn't identifiable as any activity
+        // type (e.g. a Garmin wellness/monitoring file that isn't a real workout).
+        // Let the caller decide to skip rather than guessing.
+        return 'unknown';
     }
 
     private function decodeEnum(phpFITFileAnalysis $fit, string $type, mixed $value): string {
@@ -180,7 +201,7 @@ class FitParserService {
     }
 
     private function buildName(string $sport, string $startTime): string {
-        $label = ucfirst($sport);
+        $label = ucwords(str_replace('_', ' ', $sport));
         try {
             $dt = new \DateTime($startTime);
             return $label . ' – ' . $dt->format('d M Y');
