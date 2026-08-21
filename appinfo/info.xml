@@ -19,7 +19,7 @@ For any activity with a GPS track, FIT Tracker automatically finds JPEG photos s
 
 ⚙️ **Settings**
 Choose any folder in your Nextcloud as the source for .fit files. Re-sync is triggered automatically on folder save or manual navigation. A "Re-check sport types" button lets you reclassify already-imported activities under the current sport detection logic, including moving mis-imported sleep/nap files over to Sleep.]]></description>
-    <version>1.1.8</version>
+    <version>1.1.9</version>
     <licence>agpl</licence>
     <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>
@@ -31,7 +31,7 @@ Choose any folder in your Nextcloud as the source for .fit files. Re-sync is tri
     <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_detail.png</screenshot>
     <dependencies>
         <php min-version="8.1"/>
-        <nextcloud min-version="32" max-version="33"/>
+        <nextcloud min-version="32" max-version="34"/>
     </dependencies>
     <navigations>
         <navigation>
