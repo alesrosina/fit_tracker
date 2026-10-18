@@ -7,6 +7,9 @@ import { reactive } from 'vue'
 export const navData = reactive({
     activities: [],
     sleep: [],
+    // null until /api/config has answered; '' when no folder is set
+    folderPath: null,
+    settingsOpen: false,
 })
 
 export function setActivities(list) {
@@ -15,4 +18,12 @@ export function setActivities(list) {
 
 export function setSleep(list) {
     navData.sleep = list ?? []
+}
+
+export function setFolderPath(path) {
+    navData.folderPath = path ?? ''
+}
+
+export function openSettings() {
+    navData.settingsOpen = true
 }

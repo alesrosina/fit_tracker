@@ -1,18 +1,29 @@
 <template>
     <div class="week-chart">
-        <div class="week-nav">
-            <button class="week-btn" @click="prevWeek">‹</button>
-            <strong>{{ weekTitle }}</strong>
-            <button class="week-btn" @click="nextWeek" :disabled="!canGoNext">›</button>
-        </div>
-        <canvas ref="canvas"></canvas>
+        <PageNav
+            class="week-nav"
+            :previous-label="t('fit_tracker', 'Previous week')"
+            :next-label="t('fit_tracker', 'Next week')"
+            :has-next="canGoNext"
+            @previous="prevWeek"
+            @next="nextWeek"
+        >
+            {{ weekTitle }}
+        </PageNav>
+        <canvas ref="canvas" role="img" :aria-label="t('fit_tracker', 'Minutes of activity per day, by sport')"></canvas>
     </div>
 </template>
 
 <script>
 import { Chart, BarController, BarElement, LinearScale, CategoryScale, Tooltip } from 'chart.js'
-import { sportIcon, sportColor } from '../sports.js'
+import { t } from '@nextcloud/l10n'
+import PageNav from './PageNav.vue'
+import { sportIcon, sportColor, sportLabel } from '../sports.js'
+import { iconImage } from '../icons.js'
+import { baseChartOptions } from '../chartTheme.js'
 Chart.register(BarController, BarElement, LinearScale, CategoryScale, Tooltip)
+
+const ICON_SIZE = 16
 
 function getMonday(d) {
     const date = new Date(d)
@@ -24,6 +35,7 @@ function getMonday(d) {
 
 export default {
     name: 'ActivityWeekChart',
+    components: { PageNav },
     props: {
         activities: { type: Array, required: true },
         anchorDate: { default: null },
@@ -40,8 +52,8 @@ export default {
         },
         weekTitle() {
             const diff = Math.round((this.weekStart - getMonday(new Date())) / (7 * 86400 * 1000))
-            if (diff === 0) return 'This Week'
-            if (diff === -1) return 'Last Week'
+            if (diff === 0) return t('fit_tracker', 'This week')
+            if (diff === -1) return t('fit_tracker', 'Last week')
             const sun = new Date(this.weekStart)
             sun.setDate(sun.getDate() + 6)
             const fmt = d => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
@@ -59,6 +71,7 @@ export default {
         this.$nextTick(() => this.rebuild())
     },
     beforeUnmount() {
+        this._destroyed = true
         this.chart?.destroy()
     },
     methods: {
@@ -73,75 +86,76 @@ export default {
             d.setDate(d.getDate() + 7)
             this.weekStart = d
         },
-        rebuild() {
-            this.chart?.destroy()
-            const { labels, datasets, emojisByDay, totalByDay } = this.buildWeek()
+        async rebuild() {
+            const build = this.buildWeek()
+            const base = baseChartOptions()
 
-            const emojiPlugin = {
-                id: 'emojiAboveBar',
+            // Sport icons are drawn above each bar; rasterize them first.
+            const iconNames = [...new Set(build.iconsByDay.flat())]
+            const images = Object.fromEntries(await Promise.all(
+                iconNames.map(async name => [name, await iconImage(name, base.theme.text, ICON_SIZE * 2)]),
+            ))
+            // A newer rebuild may have started while icons were loading
+            if (this._destroyed || build !== this._latestBuild) return
+
+            const { labels, datasets, iconsByDay, totalByDay } = build
+            const iconPlugin = {
+                id: 'sportIconsAboveBar',
                 afterDatasetsDraw(chart) {
                     const { ctx, scales } = chart
-                    ctx.save()
-                    ctx.font = '13px serif'
-                    ctx.textAlign = 'center'
-                    ctx.textBaseline = 'bottom'
                     totalByDay.forEach((total, i) => {
-                        const emojis = emojisByDay[i]
-                        if (!emojis || !total) return
+                        const names = iconsByDay[i]
+                        if (!names.length || !total) return
                         const x = scales.x.getPixelForValue(i)
-                        const y = scales.y.getPixelForValue(total)
-                        ctx.fillText(emojis, x, y - 4)
+                        const y = scales.y.getPixelForValue(total) - ICON_SIZE - 4
+                        const startX = x - (names.length * ICON_SIZE) / 2
+                        names.forEach((name, j) => {
+                            const img = images[name]
+                            if (img) ctx.drawImage(img, startX + j * ICON_SIZE, y, ICON_SIZE, ICON_SIZE)
+                        })
                     })
-                    ctx.restore()
                 },
             }
 
+            this.chart?.destroy()
             this.chart = new Chart(this.$refs.canvas, {
                 type: 'bar',
-                plugins: [emojiPlugin],
+                plugins: [iconPlugin],
                 data: { labels, datasets },
                 options: {
                     responsive: true,
                     animation: false,
-                    layout: { padding: { top: 24 } },
+                    layout: { padding: { top: ICON_SIZE + 8 } },
                     plugins: {
                         legend: { display: false },
                         tooltip: {
+                            ...base.tooltip,
                             callbacks: {
                                 label: ctx => {
                                     if (!ctx.parsed.y) return null
-                                    const icon = sportIcon(ctx.dataset.label)
-                                    return `${icon} ${ctx.dataset.label}: ${ctx.parsed.y} min`
+                                    // TRANSLATORS: Chart tooltip, e.g. "Running: 45 min"
+                                    return t('fit_tracker', '{sport}: {minutes} min', {
+                                        sport: sportLabel(ctx.dataset.label),
+                                        minutes: ctx.parsed.y,
+                                    })
                                 },
                             },
                         },
                     },
                     scales: {
-                        x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 } } },
-                        y: {
-                            stacked: true,
-                            beginAtZero: true,
-                            ticks: { font: { size: 11 } },
-                            grid: { color: 'rgba(0,0,0,0.05)' },
-                        },
+                        x: { stacked: true, grid: { display: false }, ticks: base.ticks },
+                        y: { stacked: true, beginAtZero: true, ticks: base.ticks, grid: base.grid, border: { color: base.grid.color } },
                     },
                 },
             })
         },
         buildWeek() {
-            const DEFAULT_COLOR = '#94a3b8'
-
             const days = Array.from({ length: 7 }, (_, i) => {
                 const d = new Date(this.weekStart)
                 d.setDate(d.getDate() + i)
                 return d
             })
-            const labels = days.map(d => {
-                const wd = d.toLocaleDateString(undefined, { weekday: 'short' })
-                const mm = String(d.getMonth() + 1).padStart(2, '0')
-                const dd = String(d.getDate()).padStart(2, '0')
-                return `${wd} ${dd}.${mm}.`
-            })
+            const labels = days.map(d => d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' }))
 
             const byDay = days.map(d => this.activities.filter(a => {
                 if (!a.startTime) return false
@@ -154,11 +168,11 @@ export default {
             const sportsPresent = [...new Set(byDay.flat().map(a => a.sport).filter(Boolean))]
 
             const datasets = sportsPresent.map(sport => {
-                const color = sportColor(sport) ?? DEFAULT_COLOR
+                const color = sportColor(sport)
                 return {
                     label: sport,
                     data: byDay.map(acts =>
-                        Math.round(acts.filter(a => a.sport === sport).reduce((s, a) => s + (a.duration ?? 0), 0) / 60)
+                        Math.round(acts.filter(a => a.sport === sport).reduce((s, a) => s + (a.duration ?? 0), 0) / 60),
                     ),
                     backgroundColor: color + 'cc',
                     borderColor: color,
@@ -168,16 +182,14 @@ export default {
                 }
             })
 
-            const emojisByDay = byDay.map(acts => {
-                const seen = new Set()
-                const emojis = acts.map(a => sportIcon(a.sport)).filter(e => !seen.has(e) && seen.add(e))
-                return emojis.length ? emojis.join('') : null
-            })
+            const iconsByDay = byDay.map(acts => [...new Set(acts.map(a => sportIcon(a.sport)))])
             const totalByDay = byDay.map(acts =>
-                Math.round(acts.reduce((s, a) => s + (a.duration ?? 0), 0) / 60)
+                Math.round(acts.reduce((s, a) => s + (a.duration ?? 0), 0) / 60),
             )
 
-            return { labels, datasets, emojisByDay, totalByDay }
+            const build = { labels, datasets, iconsByDay, totalByDay }
+            this._latestBuild = build
+            return build
         },
     },
 }
@@ -186,24 +198,9 @@ export default {
 <style scoped>
 .week-chart {
     flex: 1;
-    min-width: 280px;
+    min-width: 260px;
 }
 .week-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: var(--ft-gap-2);
 }
-.week-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 1;
-    padding: 2px 10px;
-    color: var(--color-main-text);
-}
-.week-btn:hover:not(:disabled) { background: var(--color-background-dark); }
-.week-btn:disabled { opacity: 0.3; cursor: default; }
 </style>

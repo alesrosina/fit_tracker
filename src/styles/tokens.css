@@ -1,0 +1,30 @@
+/*
+ * Spacing shorthands — every value is a multiple of Nextcloud's
+ * --default-grid-baseline (4px), as the design guidelines require.
+ */
+:root {
+    --ft-gap-1: var(--default-grid-baseline, 4px);
+    --ft-gap-2: calc(var(--default-grid-baseline, 4px) * 2);
+    --ft-gap-3: calc(var(--default-grid-baseline, 4px) * 3);
+    --ft-gap-4: calc(var(--default-grid-baseline, 4px) * 4);
+    --ft-gap-5: calc(var(--default-grid-baseline, 4px) * 5);
+    --ft-gap-6: calc(var(--default-grid-baseline, 4px) * 6);
+    --ft-gap-8: calc(var(--default-grid-baseline, 4px) * 8);
+    --ft-gap-10: calc(var(--default-grid-baseline, 4px) * 10);
+}
+
+/* Shared skeleton placeholder shown while content loads */
+.ft-skeleton {
+    background: var(--color-background-dark);
+    border-radius: var(--border-radius-element);
+    animation: ft-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ft-skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ft-skeleton { animation: none; }
+}

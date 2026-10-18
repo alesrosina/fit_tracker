@@ -1,38 +1,58 @@
 <template>
     <div class="sleep-list">
-        <h2 class="page-title">Sleep</h2>
-        <div v-if="loading" class="loading"></div>
-        <div v-else-if="error" class="error">{{ error }}</div>
+        <h2 class="page-title">{{ t('fit_tracker', 'Sleep') }}</h2>
+        <LoadingSkeleton v-if="loading" />
+        <LoadError
+            v-else-if="error"
+            :heading="t('fit_tracker', 'Could not load sleep sessions')"
+            :message="t('fit_tracker', 'Check your connection and try again.')"
+            @retry="load"
+        />
         <template v-else>
-            <div v-if="syncErrors.length > 0" class="sync-errors">
-                <strong>Import errors:</strong>
+            <NcNoteCard
+                v-if="syncErrors.length > 0"
+                type="warning"
+                :heading="n('fit_tracker', '%n file could not be imported', '%n files could not be imported', syncErrors.length)"
+                class="sync-errors"
+            >
                 <ul>
                     <li v-for="e in syncErrors" :key="e">{{ e }}</li>
                 </ul>
-            </div>
+            </NcNoteCard>
 
-            <div v-if="sessions.length > 0" class="week-panel">
+            <section v-if="sessions.length > 0" class="month-panel">
                 <SleepMonthChart :sessions="sessions" />
-            </div>
+            </section>
 
-            <div v-if="sessions.length === 0" class="empty">
-                No sleep sessions found. Make sure your FIT folder contains sleep files.
-            </div>
+            <NcEmptyContent
+                v-if="sessions.length === 0"
+                :name="t('fit_tracker', 'No sleep sessions yet')"
+                :description="t('fit_tracker', 'Sleep and nap files from your watch appear here once they are in the source folder.')"
+            >
+                <template #icon>
+                    <NcIconSvgWrapper :svg="icons.bedtime" />
+                </template>
+                <template #action>
+                    <NcButton @click="load">
+                        {{ t('fit_tracker', 'Sync now') }}
+                    </NcButton>
+                </template>
+            </NcEmptyContent>
             <template v-else>
                 <div class="sleep-grid">
-                    <div
+                    <router-link
                         v-for="session in paginated"
                         :key="session.id"
+                        :to="'/sleep/' + session.id"
                         class="sleep-card"
-                        @click="$router.push('/sleep/' + session.id)"
                     >
-                        <div class="sleep-card__icon">🛌</div>
+                        <SportBadge icon="bedtime" :color="sleepColor" :size="24" />
                         <div class="sleep-card__body">
                             <div class="sleep-card__name">{{ session.name }}</div>
-                            <div class="sleep-card__date">{{ formatDate(session.startTime) }}</div>
-                            <div class="sleep-card__duration">{{ formatDuration(session.duration) }}</div>
+                            <div class="sleep-card__date">{{ formatDay(session.startTime) }}</div>
+                            <div class="sleep-card__duration">{{ formatDurationShort(session.duration) }}</div>
                             <div v-if="session.score" class="sleep-card__score">
-                                Score: <strong>{{ session.score }}/100</strong>
+                                {{ t('fit_tracker', 'Score {score}/100', { score: session.score }) }}
                             </div>
                             <SleepStageBar
                                 v-if="hasStageDurations(session)"
@@ -43,13 +63,20 @@
                                 class="sleep-card__stagebar"
                             />
                         </div>
-                    </div>
+                    </router-link>
                 </div>
-                <div v-if="totalPages > 1" class="pagination">
-                    <button class="pagination__btn" :disabled="currentPage === 1" @click="currentPage--">&#8592;</button>
-                    <span class="pagination__info">{{ currentPage }} / {{ totalPages }}</span>
-                    <button class="pagination__btn" :disabled="currentPage === totalPages" @click="currentPage++">&#8594;</button>
-                </div>
+                <PageNav
+                    v-if="totalPages > 1"
+                    class="pagination"
+                    :previous-label="t('fit_tracker', 'Previous page')"
+                    :next-label="t('fit_tracker', 'Next page')"
+                    :has-previous="currentPage > 1"
+                    :has-next="currentPage < totalPages"
+                    @previous="currentPage--"
+                    @next="currentPage++"
+                >
+                    {{ t('fit_tracker', 'Page {page} of {total}', { page: currentPage, total: totalPages }) }}
+                </PageNav>
             </template>
         </template>
     </div>
@@ -58,29 +85,44 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { NcButton, NcEmptyContent, NcIconSvgWrapper, NcNoteCard } from '@nextcloud/vue'
 import SleepStageBar from './SleepStageBar.vue'
 import SleepMonthChart from './SleepMonthChart.vue'
+import SportBadge from './SportBadge.vue'
+import LoadingSkeleton from './LoadingSkeleton.vue'
+import LoadError from './LoadError.vue'
+import PageNav from './PageNav.vue'
 import { setSleep } from '../store/navData.js'
+import { STAGE_COLORS } from '../sleepStages.js'
+import { icons } from '../icons.js'
+import { formatDurationShort, formatDay } from '../format.js'
+
+const PAGE_SIZE = 9
 
 export default {
     name: 'SleepList',
-    components: { SleepStageBar, SleepMonthChart },
+    components: {
+        SleepStageBar, SleepMonthChart, SportBadge, LoadingSkeleton, LoadError, PageNav,
+        NcButton, NcEmptyContent, NcIconSvgWrapper, NcNoteCard,
+    },
     data() {
         return {
+            icons,
+            sleepColor: STAGE_COLORS.rem,
             sessions: [],
             syncErrors: [],
             loading: true,
-            error: null,
+            error: false,
             currentPage: 1,
         }
     },
     computed: {
         totalPages() {
-            return Math.ceil(this.sessions.length / 9) || 1
+            return Math.ceil(this.sessions.length / PAGE_SIZE) || 1
         },
         paginated() {
-            const start = (this.currentPage - 1) * 9
-            return this.sessions.slice(start, start + 9)
+            const start = (this.currentPage - 1) * PAGE_SIZE
+            return this.sessions.slice(start, start + PAGE_SIZE)
         },
     },
     mounted() {
@@ -93,7 +135,7 @@ export default {
     methods: {
         async load() {
             this.loading = true
-            this.error = null
+            this.error = false
             this.currentPage = 1
             try {
                 const { data } = await axios.get(generateUrl('/apps/fit_tracker/api/sleep'))
@@ -101,21 +143,13 @@ export default {
                 this.syncErrors = data.syncErrors  ?? []
                 setSleep(this.sessions)
             } catch (e) {
-                this.error = 'Failed to load sleep sessions'
+                this.error = true
             } finally {
                 this.loading = false
             }
         },
-        formatDate(raw) {
-            if (!raw) return ''
-            return new Date(raw).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-        },
-        formatDuration(seconds) {
-            const h = Math.floor(seconds / 3600)
-            const m = Math.floor((seconds % 3600) / 60)
-            if (h > 0) return `${h}h ${m}m`
-            return `${m}m`
-        },
+        formatDay,
+        formatDurationShort,
         hasStageDurations(session) {
             return (session.timeDeep || 0) + (session.timeLight || 0) + (session.timeRem || 0) + (session.timeAwake || 0) > 0
         },
@@ -125,99 +159,74 @@ export default {
 
 <style scoped>
 .sleep-list {
-    padding: 0 20px;
+    padding: 0 var(--ft-gap-5) var(--ft-gap-6);
     max-width: 1000px;
 }
 .page-title {
-    margin: 0 0 20px 30px;
+    margin: 0 0 var(--ft-gap-5) var(--ft-gap-8);
+    padding-top: var(--ft-gap-2);
     font-size: 20px;
-    font-weight: 600;
-    padding-top: 8px;
+    font-weight: bold;
 }
-.week-panel {
+.sync-errors ul {
+    margin: var(--ft-gap-1) 0 0 var(--ft-gap-4);
+    padding: 0;
+    list-style: disc;
+}
+.month-panel {
     background: var(--color-main-background);
     border: 1px solid var(--color-border);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 24px;
+    border-radius: var(--border-radius-container);
+    padding: var(--ft-gap-4);
+    margin-bottom: var(--ft-gap-6);
 }
 .sleep-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    gap: var(--ft-gap-4);
 }
 .sleep-card {
     display: flex;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 8px;
+    gap: var(--ft-gap-3);
+    padding: var(--ft-gap-4);
+    border-radius: var(--border-radius-container);
     border: 1px solid var(--color-border);
-    cursor: pointer;
-    transition: box-shadow 0.15s;
     background: var(--color-main-background);
+    color: var(--color-main-text);
+    text-decoration: none;
+    transition: background-color 0.15s, border-color 0.15s;
 }
 .sleep-card:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    background: var(--color-background-hover);
+    border-color: var(--color-border-maxcontrast);
 }
-.sleep-card__icon {
-    font-size: 28px;
-    line-height: 1;
+.sleep-card:focus-visible {
+    outline: 2px solid var(--color-primary-element);
+    outline-offset: 2px;
 }
+.sleep-card__body { flex: 1; min-width: 0; }
 .sleep-card__name {
-    font-weight: 600;
-    margin-bottom: 2px;
+    font-weight: bold;
+    margin-bottom: var(--ft-gap-1);
 }
 .sleep-card__date {
-    font-size: 12px;
+    font-size: var(--font-size-small);
     color: var(--color-text-maxcontrast);
-    margin-bottom: 4px;
+    margin-bottom: var(--ft-gap-1);
 }
 .sleep-card__duration {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 4px;
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: var(--ft-gap-1);
 }
 .sleep-card__score {
-    font-size: 13px;
-    margin-bottom: 6px;
+    font-size: var(--font-size-small);
 }
 .sleep-card__stagebar {
-    margin-top: 6px;
+    margin-top: var(--ft-gap-2);
 }
-.sync-errors {
-    margin-bottom: 16px;
-    padding: 12px 16px;
-    background: var(--color-background-dark);
-    border-left: 3px solid var(--color-text-error);
-    border-radius: 4px;
-    font-size: 13px;
-    color: var(--color-text-error);
-}
-.sync-errors ul { margin: 4px 0 0 16px; padding: 0; }
-.loading, .error, .empty {
-    padding: 40px;
-    text-align: center;
-    color: var(--color-text-maxcontrast);
-}
-.error { color: var(--color-text-error); }
 .pagination {
-    display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 16px;
-    margin-top: 24px;
+    margin-top: var(--ft-gap-6);
 }
-.pagination__btn {
-    background: var(--color-main-background);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius);
-    padding: 6px 14px;
-    cursor: pointer;
-    font-size: 16px;
-    color: var(--color-main-text);
-    transition: background 0.15s;
-}
-.pagination__btn:hover:not(:disabled) { background: var(--color-background-dark); }
-.pagination__btn:disabled { opacity: 0.4; cursor: default; }
-.pagination__info { font-size: 14px; color: var(--color-text-maxcontrast); min-width: 60px; text-align: center; }
 </style>

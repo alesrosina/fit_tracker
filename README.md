@@ -22,11 +22,13 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 - **Share button** on the activity detail page generates a shareable image card (route map + key stats) for the activity
 - **Detail view** per activity includes:
   - Key stats (distance, pace or speed depending on sport, heart rate, elevation, calories, cadence)
-  - Interactive Leaflet map with GPS route and 📷 photo pins
-  - Photos taken along the route, shown as a thumbnail strip and as clickable map pins for any activity with a GPS track — only GPS-tagged JPEG photos stored in Nextcloud are matched, within 200 m of the track
-  - Elevation profile chart
-  - Heart rate chart
+  - Interactive Leaflet map with GPS route and photo pins
+  - Photos taken along the route, shown as a thumbnail strip and as clickable map pins for any activity with a GPS track — only GPS-tagged JPEG photos stored in Nextcloud are matched, within 200 m of the track. Clicking one opens a viewer with previous/next navigation
+  - Charts for heart rate, elevation, power, and pace or speed (pace is shown Garmin-style: faster is up, m:ss values, stops dip to the bottom), plus average speed per km for running and cycling
   - Lap table with per-lap pace/speed, heart rate and distance
+- **"⋯" menu** on activity and sleep detail pages:
+  - **Re-import from file** reads the `.fit` file again with the current parser
+  - **Delete** removes the entry and moves its `.fit` file to the Nextcloud trash; restoring the file imports it again on the next sync
 
 ### Sleep tracking
 
@@ -42,9 +44,12 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 
 ### Settings
 
-- Choose any folder in your Nextcloud as the source for `.fit` files
-- Re-sync is triggered automatically on folder save or manual navigation
-- **Re-check sport types** button reclassifies already-imported activities under the current sport detection logic, and moves any that turn out to be sleep/nap files over to Sleep
+Open **Settings** at the bottom of the navigation:
+
+- **Source folder:** choose any folder in your Nextcloud as the source for `.fit` files; it is saved right away
+- **Sync now:** import new `.fit` files from the folder. This also happens automatically every time the app is opened, so you only need it after adding files while the app is open
+- **Re-check sport types** reclassifies already-imported activities under the current sport detection logic, and moves any that turn out to be sleep/nap files over to Sleep
+- **Re-import all files** removes all imported data and imports every `.fit` file in the folder again — useful after an update that improves file reading
 
 ---
 
@@ -53,7 +58,7 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 <!-- Add your own screenshots here. Suggested captures:
      - Main dashboard (activity calendar + week chart + last sleep widget)
      - Activity detail with map and charts
-     - Sleep list with 7-night chart
+     - Sleep list with monthly chart
      - Sleep detail with timeline
 -->
 
@@ -99,7 +104,7 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
    ```bash
    php occ app:enable fit_tracker
    ```
-5. Open FIT Tracker from the Nextcloud navigation bar, go to **Settings**, and pick the folder containing your `.fit` files.
+5. Open FIT Tracker from the Nextcloud navigation bar, open **Settings** at the bottom of the navigation, and pick the folder containing your `.fit` files.
 
 ---
 

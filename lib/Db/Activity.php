@@ -125,6 +125,7 @@ class Activity extends Entity {
             'avgCadence'    => $this->avgCadence,
             'avgPower'      => $this->avgPower,
             'createdAt'     => $this->createdAt,
+            'fitFilePath'   => $this->fitFilePath,
         ];
     }
 }

@@ -1,26 +1,32 @@
 <template>
     <div class="activity-calendar">
-        <div class="cal-nav">
-            <button class="cal-btn" @click="prevMonth">‹</button>
-            <strong>{{ monthTitle }}</strong>
-            <button class="cal-btn" @click="nextMonth">›</button>
-        </div>
+        <PageNav
+            class="cal-nav"
+            :previous-label="t('fit_tracker', 'Previous month')"
+            :next-label="t('fit_tracker', 'Next month')"
+            @previous="prevMonth"
+            @next="nextMonth"
+        >
+            {{ monthTitle }}
+        </PageNav>
         <div class="cal-grid">
-            <div v-for="d in weekDays" :key="d" class="cal-header-cell">{{ d }}</div>
-            <div
-                v-for="(cell, idx) in cells"
-                :key="idx"
-                class="cal-cell"
-                :class="{
-                    'cal-cell--filler': !cell,
-                    'cal-cell--today': cell && cell.isToday,
-                    'cal-cell--selected': cell && cell.isSelected,
-                }"
-                @click="cell && selectDay(cell)"
-            >
-                <template v-if="cell">
+            <div v-for="d in weekDays" :key="d" class="cal-header-cell" aria-hidden="true">{{ d }}</div>
+            <template v-for="(cell, idx) in cells" :key="idx">
+                <div v-if="!cell" class="cal-cell cal-cell--filler" />
+                <button
+                    v-else
+                    type="button"
+                    class="cal-cell"
+                    :class="{
+                        'cal-cell--today': cell.isToday,
+                        'cal-cell--selected': cell.isSelected,
+                    }"
+                    :aria-label="cellLabel(cell)"
+                    :aria-pressed="cell.isSelected"
+                    @click="selectDay(cell)"
+                >
                     <span class="cal-cell__day">{{ cell.day }}</span>
-                    <div class="cal-cell__dots">
+                    <span class="cal-cell__dots">
                         <span
                             v-for="(a, i) in cell.activities.slice(0, 4)"
                             :key="i"
@@ -28,18 +34,21 @@
                             :title="a.name"
                             :style="{ background: sportColor(a.sport) }"
                         ></span>
-                    </div>
-                </template>
-            </div>
+                    </span>
+                </button>
+            </template>
         </div>
     </div>
 </template>
 
 <script>
+import { n } from '@nextcloud/l10n'
+import PageNav from './PageNav.vue'
 import { sportColor } from '../sports.js'
 
 export default {
     name: 'ActivityCalendar',
+    components: { PageNav },
     props: {
         activities: { type: Array, required: true },
     },
@@ -52,8 +61,10 @@ export default {
         monthTitle() {
             return new Date(this.year, this.month, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
         },
+        // Localized short weekday names, Monday first (2024-01-01 was a Monday)
         weekDays() {
-            return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+            return Array.from({ length: 7 }, (_, i) =>
+                new Date(2024, 0, 1 + i).toLocaleDateString(undefined, { weekday: 'short' }))
         },
         activityByDay() {
             const map = {}
@@ -101,6 +112,13 @@ export default {
             this.selectedDay = cell.date
             this.$emit('select-date', cell.date)
         },
+        cellLabel(cell) {
+            const date = cell.date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })
+            const count = cell.activities.length
+            if (!count) return date
+            // TRANSLATORS: Calendar day for screen readers, e.g. "Monday, 3 March: 2 activities"
+            return n('fit_tracker', '{date}: %n activity', '{date}: %n activities', count, { date })
+        },
     },
 }
 </script>
@@ -108,63 +126,55 @@ export default {
 <style scoped>
 .activity-calendar {
     flex: 1;
-    min-width: 280px;
+    min-width: 260px;
 }
 .cal-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
+    margin-bottom: var(--ft-gap-2);
 }
-.cal-btn {
-    background: none;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 18px;
-    line-height: 1;
-    padding: 2px 10px;
-    color: var(--color-main-text);
-}
-.cal-btn:hover { background: var(--color-background-dark); }
 .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 2px;
+    gap: var(--ft-gap-1);
 }
 .cal-header-cell {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: var(--font-size-small);
+    font-weight: bold;
     text-align: center;
     color: var(--color-text-maxcontrast);
-    padding: 4px 0;
-    text-transform: uppercase;
+    padding: var(--ft-gap-1) 0;
 }
 .cal-cell {
-    min-height: 46px;
-    border-radius: 4px;
-    padding: 3px;
+    min-height: calc(var(--default-grid-baseline) * 11);
+    margin: 0;
+    padding: var(--ft-gap-1);
     border: 1px solid transparent;
+    border-radius: var(--border-radius-small);
+    background: transparent;
+    color: var(--color-main-text);
     display: flex;
     flex-direction: column;
     align-items: center;
+    cursor: pointer;
+    font: inherit;
 }
-.cal-cell--filler { border: none; }
-.cal-cell { cursor: pointer; }
+.cal-cell:hover { background: var(--color-background-hover); }
+.cal-cell:focus-visible {
+    outline: 2px solid var(--color-primary-element);
+    outline-offset: 1px;
+}
 .cal-cell--filler { cursor: default; }
+.cal-cell--filler:hover { background: transparent; }
+.cal-cell--today,
 .cal-cell--selected {
-    background: var(--color-primary-element-light, rgba(0, 130, 201, 0.15));
     border-color: var(--color-primary-element);
-}
-.cal-cell--today {
-    border-color: var(--color-primary-element);
-    background: var(--color-primary-element-light, rgba(0, 130, 201, 0.1));
+    background: var(--color-primary-element-light);
+    color: var(--color-primary-element-light-text);
 }
 .cal-cell__day {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: var(--font-size-small);
     line-height: 1.5;
 }
+.cal-cell--today .cal-cell__day { font-weight: bold; }
 .cal-cell__dots {
     display: flex;
     flex-wrap: wrap;
@@ -175,7 +185,7 @@ export default {
 .cal-dot {
     width: 6px;
     height: 6px;
-    border-radius: 50%;
+    border-radius: var(--border-radius-pill);
     display: inline-block;
 }
 </style>

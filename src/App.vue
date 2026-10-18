@@ -3,25 +3,40 @@
         <NcAppNavigation>
             <template #list>
                 <NcAppNavigationItem
-                    v-for="s in sports"
+                    v-for="s in topItems"
                     :key="s.value"
                     :name="s.label"
                     :active="currentSport === s.value"
                     @click="selectSport(s.value, $event)"
                 >
                     <template #icon>
-                        <span class="nav-icon">{{ s.icon }}</span>
+                        <NcIconSvgWrapper :svg="iconSvg(s.icon)" :size="20" />
                     </template>
                 </NcAppNavigationItem>
+
+                <template v-if="sports.length > 0">
+                    <NcAppNavigationCaption :name="t('fit_tracker', 'Sports')" is-heading />
+                    <NcAppNavigationItem
+                        v-for="s in sports"
+                        :key="s.value"
+                        :name="s.label"
+                        :active="currentSport === s.value"
+                        @click="selectSport(s.value, $event)"
+                    >
+                        <template #icon>
+                            <NcIconSvgWrapper :svg="iconSvg(s.icon)" :size="20" />
+                        </template>
+                    </NcAppNavigationItem>
+                </template>
             </template>
 
             <template #footer>
                 <NcAppNavigationItem
-                    name="Settings"
-                    @click="openSettings"
+                    :name="t('fit_tracker', 'Settings')"
+                    @click="openSettings($event)"
                 >
                     <template #icon>
-                        <span class="nav-icon">⚙</span>
+                        <NcIconSvgWrapper :svg="icons.settings" :size="20" />
                     </template>
                 </NcAppNavigationItem>
             </template>
@@ -31,64 +46,116 @@
             <router-view />
         </NcAppContent>
 
-        <NcModal v-if="showSettings" @close="showSettings = false" size="small">
-            <template #default>
-                <div class="settings-modal">
-                    <h2>FIT Tracker Settings</h2>
+        <NcAppSettingsDialog
+            v-model:open="navData.settingsOpen"
+            :name="t('fit_tracker', 'FIT Tracker settings')"
+            show-navigation
+        >
+            <NcAppSettingsSection id="fit-tracker-folder" :name="t('fit_tracker', 'Source folder')">
+                <NcFormBox>
+                    <NcFormBoxButton
+                        :label="t('fit_tracker', 'Choose folder')"
+                        :description="navData.folderPath || t('fit_tracker', 'No folder selected')"
+                        :disabled="saving"
+                        @click="pickFolder"
+                    >
+                        <template #icon>
+                            <NcIconSvgWrapper :svg="icons.folder_open" :size="20" />
+                        </template>
+                    </NcFormBoxButton>
+                </NcFormBox>
+                <NcNoteCard v-if="saveError" type="error" :text="saveError" />
 
-                    <label>Folder to scan for .fit files</label>
-                    <div class="folder-picker">
-                        <span class="folder-path">{{ folderPath || 'No folder selected' }}</span>
-                        <NcButton @click="pickFolder" type="secondary" :disabled="saving">
-                            Choose folder
-                        </NcButton>
-                    </div>
+                <NcFormBox class="settings-gap">
+                    <NcFormBoxButton
+                        :label="syncing ? t('fit_tracker', 'Syncing…') : t('fit_tracker', 'Sync now')"
+                        :description="t('fit_tracker', 'Look for new .fit files in the folder and import them. This already happens every time the app is opened; use it after adding files while the app is open.')"
+                        :disabled="syncing || !navData.folderPath"
+                        @click="syncNow"
+                    >
+                        <template #icon>
+                            <NcLoadingIcon v-if="syncing" :size="20" />
+                            <NcIconSvgWrapper v-else :svg="icons.sync" :size="20" />
+                        </template>
+                    </NcFormBoxButton>
+                </NcFormBox>
+                <NcNoteCard v-if="syncError" type="error" :text="syncError" />
+                <NcNoteCard v-if="syncResult" :type="syncResult.errors ? 'warning' : 'success'" :text="syncSummary" />
+            </NcAppSettingsSection>
 
-                    <div v-if="saveError" class="error">{{ saveError }}</div>
-                    <div v-if="saveSuccess" class="success">Settings saved.</div>
+            <NcAppSettingsSection id="fit-tracker-maintenance" :name="t('fit_tracker', 'Maintenance')">
+                <NcFormBox>
+                    <NcFormBoxButton
+                        :label="repairing ? t('fit_tracker', 'Re-checking sport types…') : t('fit_tracker', 'Re-check sport types')"
+                        :description="t('fit_tracker', 'Classify imported activities again with the current sport detection. Sleep and nap files are moved to Sleep.')"
+                        :disabled="repairing"
+                        @click="repairSportTypes"
+                    >
+                        <template #icon>
+                            <NcLoadingIcon v-if="repairing" :size="20" />
+                            <NcIconSvgWrapper v-else :svg="icons.sync" :size="20" />
+                        </template>
+                    </NcFormBoxButton>
+                </NcFormBox>
+                <NcNoteCard v-if="repairError" type="error" :text="repairError" />
+                <NcNoteCard v-if="repairResult" type="success" :text="repairSummary" />
 
-                    <div class="repair-section">
-                        <label>Fix sport labels on already-imported activities</label>
-                        <NcButton @click="repairSportTypes" :disabled="repairing" type="secondary">
-                            {{ repairing ? 'Re-checking…' : 'Re-check sport types' }}
-                        </NcButton>
-                        <div v-if="repairError" class="error">{{ repairError }}</div>
-                        <div v-if="repairResult" class="success">
-                            Checked {{ repairResult.checked }}, updated {{ repairResult.sportUpdated }}, moved to sleep {{ repairResult.movedToSleep }}, still unrecognized {{ repairResult.stillUnrecognized }}.
-                        </div>
-                    </div>
-
-                    <div class="settings-actions">
-                        <NcButton @click="showSettings = false" type="tertiary">Close</NcButton>
-                        <NcButton @click="saveConfig" :disabled="saving || !folderPath" type="primary">Save</NcButton>
-                    </div>
-                </div>
-            </template>
-        </NcModal>
+                <NcFormBox class="settings-gap">
+                    <NcFormBoxButton
+                        :label="reimporting ? t('fit_tracker', 'Re-importing all files…') : t('fit_tracker', 'Re-import all files')"
+                        :description="t('fit_tracker', 'Remove all imported activities and sleep sessions and import every .fit file in the folder again. Use this after an update that improves file reading. Large folders can take a few minutes.')"
+                        :disabled="reimporting || !navData.folderPath"
+                        @click="reimportAll"
+                    >
+                        <template #icon>
+                            <NcLoadingIcon v-if="reimporting" :size="20" />
+                            <NcIconSvgWrapper v-else :svg="icons.refresh" :size="20" />
+                        </template>
+                    </NcFormBoxButton>
+                </NcFormBox>
+                <NcNoteCard v-if="reimportError" type="error" :text="reimportError" />
+                <NcNoteCard v-if="reimportResult" :type="reimportResult.errors.length ? 'warning' : 'success'" :text="reimportSummary" />
+            </NcAppSettingsSection>
+        </NcAppSettingsDialog>
     </NcContent>
 </template>
 
 <script>
-import { NcContent, NcAppNavigation, NcAppNavigationItem, NcAppContent, NcModal, NcButton } from '@nextcloud/vue'
+import {
+    NcContent, NcAppNavigation, NcAppNavigationItem, NcAppNavigationCaption,
+    NcAppContent, NcAppSettingsDialog, NcAppSettingsSection, NcFormBox, NcFormBoxButton,
+    NcIconSvgWrapper, NcLoadingIcon, NcNoteCard,
+} from '@nextcloud/vue'
 import { getFilePickerBuilder, FilePickerType } from '@nextcloud/dialogs'
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { t, n } from '@nextcloud/l10n'
 import { SPORTS, SPORT_MAP, sportIcon, sportLabel } from './sports.js'
-import { navData } from './store/navData.js'
+import { navData, setFolderPath, setActivities, setSleep } from './store/navData.js'
+import { icons } from './icons.js'
 
 export default {
     name: 'App',
-    components: { NcContent, NcAppNavigation, NcAppNavigationItem, NcAppContent, NcModal, NcButton },
+    components: {
+        NcContent, NcAppNavigation, NcAppNavigationItem, NcAppNavigationCaption,
+        NcAppContent, NcAppSettingsDialog, NcAppSettingsSection, NcFormBox, NcFormBoxButton,
+        NcIconSvgWrapper, NcLoadingIcon, NcNoteCard,
+    },
     data() {
         return {
-            showSettings: false,
-            folderPath: '',
+            navData,
+            icons,
             saving: false,
             saveError: null,
-            saveSuccess: false,
+            syncing: false,
+            syncError: null,
+            syncResult: null,
             repairing: false,
             repairError: null,
             repairResult: null,
+            reimporting: false,
+            reimportError: null,
+            reimportResult: null,
         }
     },
     computed: {
@@ -96,9 +163,16 @@ export default {
             if (this.$route.path.startsWith('/sleep')) return 'sleep'
             return this.$route.query.sport || 'all'
         },
-        // Only show nav entries for sport types (and Sleep) that actually
-        // exist among what's been imported — ActivityList/SleepList publish
-        // their loaded data into the shared navData store as they fetch it.
+        topItems() {
+            const items = [{ value: 'all', label: t('fit_tracker', 'All activities'), icon: 'exercise' }]
+            if (navData.sleep.length > 0) {
+                items.push({ value: 'sleep', label: t('fit_tracker', 'Sleep'), icon: 'bedtime' })
+            }
+            return items
+        },
+        // Only show nav entries for sport types that actually exist among
+        // what's been imported — ActivityList/SleepList publish their loaded
+        // data into the shared navData store as they fetch it.
         sports() {
             const present = new Set(navData.activities.map(a => a.sport))
             const curated = SPORTS.filter(s => present.has(s.value))
@@ -106,15 +180,43 @@ export default {
                 .filter(v => !SPORT_MAP[v])
                 .sort()
                 .map(v => ({ value: v, label: sportLabel(v), icon: sportIcon(v) }))
-
-            const list = [{ value: 'all', label: 'All Activities', icon: '🏅' }, ...curated, ...extra]
-            if (navData.sleep.length > 0) {
-                list.push({ value: 'sleep', label: 'Sleep', icon: '🛌' })
-            }
-            return list
+            return [...curated, ...extra]
+        },
+        repairSummary() {
+            const r = this.repairResult
+            if (!r) return ''
+            // TRANSLATORS: Result of re-checking sport types. {checked} is the number of activities looked at, the others are counts of how many were changed.
+            return t('fit_tracker', 'Checked {checked} activities: {updated} updated, {moved} moved to sleep, {unrecognized} still unrecognized.', {
+                checked: r.checked,
+                updated: r.sportUpdated,
+                moved: r.movedToSleep,
+                unrecognized: r.stillUnrecognized,
+            })
+        },
+        syncSummary() {
+            const r = this.syncResult
+            if (!r) return ''
+            const imported = n('fit_tracker', '%n new activity', '%n new activities', r.activities)
+                + ' · ' + n('fit_tracker', '%n new sleep session', '%n new sleep sessions', r.sleep)
+            if (!r.errors) return imported
+            return imported + ' · ' + n('fit_tracker', '%n file could not be imported', '%n files could not be imported', r.errors)
+        },
+        reimportSummary() {
+            const r = this.reimportResult
+            if (!r) return ''
+            const imported = n('fit_tracker', 'Imported %n activity', 'Imported %n activities', r.activities)
+                + ' · ' + n('fit_tracker', '%n sleep session', '%n sleep sessions', r.sleep)
+            if (!r.errors.length) return imported
+            return imported + ' · ' + n('fit_tracker', '%n file could not be imported', '%n files could not be imported', r.errors.length)
         },
     },
+    mounted() {
+        this.loadConfig()
+    },
     methods: {
+        iconSvg(name) {
+            return icons[name] ?? icons.exercise
+        },
         selectSport(sport, event) {
             event?.preventDefault()
             if (sport === 'sleep') {
@@ -124,45 +226,89 @@ export default {
             const query = sport === 'all' ? {} : { sport }
             this.$router.push({ path: '/', query }).catch(() => {})
         },
-        async openSettings() {
-            this.saveError = null
-            this.saveSuccess = false
+        async loadConfig() {
             try {
                 const { data } = await axios.get(generateUrl('/apps/fit_tracker/api/config'))
-                this.folderPath = data.folder_path || ''
+                setFolderPath(data.folder_path)
             } catch (e) {
-                this.folderPath = ''
+                setFolderPath('')
             }
-            this.showSettings = true
+        },
+        openSettings(event) {
+            event?.preventDefault()
+            this.saveError = null
+            this.repairError = null
+            this.repairResult = null
+            this.reimportError = null
+            this.reimportResult = null
+            navData.settingsOpen = true
         },
         async pickFolder() {
-            const picker = getFilePickerBuilder('Select folder for FIT files')
+            const picker = getFilePickerBuilder(t('fit_tracker', 'Choose the folder with your .fit files'))
                 .setMultiSelect(false)
                 .setType(FilePickerType.Choose)
                 .allowDirectories(true)
                 .build()
+            let path
             try {
-                const path = await picker.pick()
-                if (path) {
-                    this.folderPath = path
-                }
+                path = await picker.pick()
             } catch (e) {
-                // user cancelled
+                return // picker closed without a choice
             }
+            if (path) await this.saveFolder(path)
         },
-        async saveConfig() {
+        async saveFolder(path) {
             this.saving = true
             this.saveError = null
-            this.saveSuccess = false
             try {
-                await axios.post(generateUrl('/apps/fit_tracker/api/config'), { folder_path: this.folderPath })
-                this.saveSuccess = true
-                this.showSettings = false
+                await axios.post(generateUrl('/apps/fit_tracker/api/config'), { folder_path: path })
+                setFolderPath(path)
                 window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
             } catch (e) {
-                this.saveError = e.response?.data?.error ?? 'Failed to save settings'
+                this.saveError = t('fit_tracker', 'Could not save the folder. Check that it still exists and try again.')
             } finally {
                 this.saving = false
+            }
+        },
+        // The backend imports new files from the folder whenever the lists are fetched
+        async syncNow() {
+            this.syncing = true
+            this.syncError = null
+            this.syncResult = null
+            const before = { activities: navData.activities.length, sleep: navData.sleep.length }
+            try {
+                const [actRes, sleepRes] = await Promise.all([
+                    axios.get(generateUrl('/apps/fit_tracker/api/activities')),
+                    axios.get(generateUrl('/apps/fit_tracker/api/sleep')),
+                ])
+                const activities = actRes.data.activities ?? []
+                const sessions   = sleepRes.data.sessions ?? []
+                setActivities(activities)
+                setSleep(sessions)
+                this.syncResult = {
+                    activities: Math.max(0, activities.length - before.activities),
+                    sleep: Math.max(0, sessions.length - before.sleep),
+                    errors: new Set([...(actRes.data.syncErrors ?? []), ...(sleepRes.data.syncErrors ?? [])]).size,
+                }
+                window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
+            } catch (e) {
+                this.syncError = t('fit_tracker', 'Could not sync the folder. Try again later.')
+            } finally {
+                this.syncing = false
+            }
+        },
+        async reimportAll() {
+            this.reimporting = true
+            this.reimportError = null
+            this.reimportResult = null
+            try {
+                const { data } = await axios.post(generateUrl('/apps/fit_tracker/api/reimport'))
+                this.reimportResult = data
+                window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
+            } catch (e) {
+                this.reimportError = t('fit_tracker', 'Could not re-import the files. Try again later; already imported entries come back with the next sync.')
+            } finally {
+                this.reimporting = false
             }
         },
         async repairSportTypes() {
@@ -174,7 +320,7 @@ export default {
                 this.repairResult = data
                 window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
             } catch (e) {
-                this.repairError = e.response?.data?.error ?? 'Failed to re-check sport types'
+                this.repairError = t('fit_tracker', 'Could not re-check sport types. Try again later.')
             } finally {
                 this.repairing = false
             }
@@ -184,49 +330,7 @@ export default {
 </script>
 
 <style scoped>
-.settings-modal {
-    padding: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+.settings-gap {
+    margin-top: var(--ft-gap-4);
 }
-.settings-modal h2 { margin: 0; }
-.settings-modal label {
-    font-weight: 600;
-    font-size: 14px;
-}
-.folder-picker {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius);
-}
-.folder-path {
-    flex: 1;
-    font-size: 13px;
-    color: var(--color-text-maxcontrast);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-.folder-path:not(:empty) { color: var(--color-main-text); }
-.repair-section {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 8px;
-    border-top: 1px solid var(--color-border);
-}
-.settings-actions {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-top: 4px;
-}
-.error { color: var(--color-text-error); font-size: 13px; }
-.success { color: var(--color-text-success); font-size: 13px; }
-.sync-result { font-size: 13px; }
-.nav-icon { font-size: 16px; }
 </style>

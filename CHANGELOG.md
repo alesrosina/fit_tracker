@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.0]
+
+### Changed
+- UI follows the current Nextcloud design guidelines: Material Symbols icons instead of emoji, Nextcloud components for buttons, menus and dialogs, theme variables for spacing, colours, radii and font sizes (fixes dark mode), and sentence-case labels
+- Settings moved to the standard Nextcloud settings dialog; picking a folder saves it right away
+- Sports are grouped under a "Sports" heading in the navigation
+- Delete moved into the "⋯" menu on detail pages and confirmed with a Nextcloud dialog that states the .fit file is moved to the trash
+- Deleting an activity or sleep session now moves its .fit file to the Nextcloud trash, so it no longer comes back on the next sync; restoring the file from the trash imports it again
+- Loading shows skeleton placeholders; load errors offer a Retry button; empty pages explain the next step
+- Photo viewer uses the Nextcloud modal with built-in previous/next navigation
+- Pace chart looks like Garmin's: faster is up, values shown as m:ss, and stops dip to the bottom instead of stretching the scale
+
+### Added
+- "Sync now" in Settings → Source folder, with a summary of newly imported activities and sleep sessions (the folder is still synced automatically when the app opens)
+- "Re-import from file" in the "⋯" menu of an activity or sleep session: reads the file again with the current parser (it may move between activities and sleep)
+- "Re-import all files" in Settings → Maintenance
+- Translation support for all interface text
+- Keyboard and screen reader support for activity cards, calendar days, photos and chart navigation
+
+### Fixed
+- Pace and speed charts are smoothed and averaged instead of sampling single GPS points, removing most of the spikes
+- Distances in chart tooltips were shown 1000× too small (e.g. "0.01 km" instead of "10.00 km")
+
 ## [1.1.10]
 
 ### Changed

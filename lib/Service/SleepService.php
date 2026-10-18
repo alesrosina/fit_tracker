@@ -45,10 +45,29 @@ class SleepService {
         );
     }
 
-    public function deleteForUser(int $id, string $userId): void {
-        $this->sleepMapper->findForUser($id, $userId); // auth check
-        $this->sleepStageMapper->deleteBySleep($id);
-        $this->sleepMapper->deleteForUser($id, $userId);
+    /** @throws DoesNotExistException */
+    public function findForUser(int $id, string $userId): Sleep {
+        return $this->sleepMapper->findForUser($id, $userId);
+    }
+
+    public function findIdByFitPath(string $userId, string $fitFilePath): ?int {
+        try {
+            return $this->sleepMapper->findByFitPath($userId, $fitFilePath)->getId();
+        } catch (DoesNotExistException) {
+            return null;
+        }
+    }
+
+    /** Remove a session's imported data (not its .fit file). */
+    public function deleteRows(Sleep $sleep, string $userId): void {
+        $this->sleepStageMapper->deleteBySleep($sleep->getId());
+        $this->sleepMapper->deleteForUser($sleep->getId(), $userId);
+    }
+
+    public function deleteAllRowsForUser(string $userId): void {
+        foreach ($this->sleepMapper->findAllForUser($userId) as $sleep) {
+            $this->deleteRows($sleep, $userId);
+        }
     }
 
     /**
@@ -110,9 +129,7 @@ class SleepService {
         foreach ($existingPaths as $dbPath) {
             if (!isset($currentSet[$dbPath])) {
                 try {
-                    $sleep = $this->sleepMapper->findByFitPath($userId, $dbPath);
-                    $this->sleepStageMapper->deleteBySleep($sleep->getId());
-                    $this->sleepMapper->deleteForUser($sleep->getId(), $userId);
+                    $this->deleteRows($this->sleepMapper->findByFitPath($userId, $dbPath), $userId);
                     $stats['removed']++;
                 } catch (\Exception) {
                     // Already gone

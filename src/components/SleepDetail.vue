@@ -1,57 +1,54 @@
 <template>
     <div class="sleep-detail">
-        <div class="sleep-detail__back">
-            <button class="back-btn" @click="$router.push('/sleep')">← Back</button>
-            <button v-if="session" class="delete-btn" @click="deleteSession">Delete</button>
-        </div>
+        <DetailToolbar
+            back-to="/sleep"
+            :back-label="t('fit_tracker', 'Sleep')"
+            :show-actions="!!session"
+            :delete-label="t('fit_tracker', 'Delete sleep session')"
+            :delete-title="t('fit_tracker', 'Delete sleep session and move its file to the trash?')"
+            :delete-message="deleteMessage"
+            :busy-label="busyLabel"
+            @delete="deleteSession"
+            @reimport="reimport"
+        />
 
-        <div v-if="loading" class="loading"></div>
-        <div v-else-if="error" class="error">{{ error }}</div>
+        <LoadingSkeleton v-if="loading" variant="detail" />
+        <NcEmptyContent
+            v-else-if="notFound"
+            :name="t('fit_tracker', 'Sleep session not found')"
+            :description="t('fit_tracker', 'It may have been deleted.')"
+        >
+            <template #icon>
+                <NcIconSvgWrapper :svg="icons.bedtime" />
+            </template>
+        </NcEmptyContent>
+        <LoadError
+            v-else-if="error"
+            :heading="t('fit_tracker', 'Could not load sleep session')"
+            :message="t('fit_tracker', 'Check your connection and try again.')"
+            @retry="load"
+        />
 
         <template v-else-if="session">
             <div class="sleep-detail__header">
-                <span class="sleep-icon">🛌</span>
+                <SportBadge icon="bedtime" :color="stageColors.rem" :size="32" />
                 <div>
                     <h2>{{ session.name }}</h2>
-                    <div class="subtitle">{{ formatDate(session.startTime) }} → {{ formatTime(session.endTime) }}</div>
+                    <div class="subtitle">{{ formatDateTime(session.startTime) }} – {{ formatTime(session.endTime) }}</div>
                 </div>
             </div>
 
             <!-- Key stats -->
             <div class="stats-grid">
-                <div class="stat">
-                    <div class="stat__label">Duration</div>
-                    <div class="stat__value">{{ formatDuration(session.duration) }}</div>
-                </div>
-                <div v-if="session.score" class="stat">
-                    <div class="stat__label">Sleep Score</div>
-                    <div class="stat__value">{{ session.score }}<span class="stat__unit">/100</span></div>
-                </div>
-                <div v-if="session.hrvScore" class="stat">
-                    <div class="stat__label">HRV Score</div>
-                    <div class="stat__value">{{ session.hrvScore }}</div>
-                </div>
-                <div v-if="session.timeDeep" class="stat">
-                    <div class="stat__label">Deep Sleep</div>
-                    <div class="stat__value">{{ formatMins(session.timeDeep) }}</div>
-                </div>
-                <div v-if="session.timeRem" class="stat">
-                    <div class="stat__label">REM Sleep</div>
-                    <div class="stat__value">{{ formatMins(session.timeRem) }}</div>
-                </div>
-                <div v-if="session.timeLight" class="stat">
-                    <div class="stat__label">Light Sleep</div>
-                    <div class="stat__value">{{ formatMins(session.timeLight) }}</div>
-                </div>
-                <div v-if="session.timeAwake" class="stat">
-                    <div class="stat__label">Time Awake</div>
-                    <div class="stat__value">{{ formatMins(session.timeAwake) }}</div>
+                <div v-for="stat in stats" :key="stat.label" class="stat">
+                    <div class="stat__label">{{ stat.label }}</div>
+                    <div class="stat__value">{{ stat.value }}<span v-if="stat.unit" class="stat__unit">{{ stat.unit }}</span></div>
                 </div>
             </div>
 
             <!-- Stage distribution bar -->
-            <div v-if="hasStages">
-                <h3>Stage Distribution</h3>
+            <section v-if="hasStages">
+                <h3>{{ t('fit_tracker', 'Stage distribution') }}</h3>
                 <SleepStageBar
                     :timeDeep="session.timeDeep"
                     :timeLight="session.timeLight"
@@ -60,18 +57,17 @@
                     class="dist-bar"
                 />
                 <div class="stage-legend">
-                    <span class="legend-item"><span class="dot" style="background:#1e40af"></span>Deep</span>
-                    <span class="legend-item"><span class="dot" style="background:#7c3aed"></span>REM</span>
-                    <span class="legend-item"><span class="dot" style="background:#60a5fa"></span>Light</span>
-                    <span class="legend-item"><span class="dot" style="background:#fbbf24"></span>Awake</span>
+                    <span v-for="key in ['deep', 'rem', 'light', 'awake']" :key="key" class="legend-item">
+                        <span class="dot" :style="{ background: stageColors[key] }"></span>{{ stageLabel(key) }}
+                    </span>
                 </div>
-            </div>
+            </section>
 
             <!-- Sleep stages timeline -->
-            <div v-if="stages.length > 0">
-                <h3>Sleep Timeline</h3>
+            <section v-if="stages.length > 0">
+                <h3>{{ t('fit_tracker', 'Sleep timeline') }}</h3>
                 <div class="timeline">
-                    <div class="timeline__track">
+                    <div class="timeline__track" role="img" :aria-label="t('fit_tracker', 'Sleep stages over the night')">
                         <div
                             v-for="(seg, idx) in timelineSegments"
                             :key="idx"
@@ -80,7 +76,7 @@
                             :title="seg.label + '\n' + seg.timeStr"
                         ></div>
                     </div>
-                    <div class="timeline__labels">
+                    <div class="timeline__labels" aria-hidden="true">
                         <span
                             v-for="(mark, idx) in timeMarks"
                             :key="idx"
@@ -93,22 +89,22 @@
                 <table class="stages-table">
                     <thead>
                         <tr>
-                            <th>Time</th>
-                            <th>Stage</th>
-                            <th>Duration</th>
+                            <th>{{ t('fit_tracker', 'Time') }}</th>
+                            <th>{{ t('fit_tracker', 'Stage') }}</th>
+                            <th>{{ t('fit_tracker', 'Duration') }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(s, idx) in stageRows" :key="idx">
                             <td>{{ s.time }}</td>
                             <td>
-                                <span class="stage-badge" :style="{ background: s.color }">{{ s.stage }}</span>
+                                <span class="stage-name"><span class="dot" :style="{ background: s.color }"></span>{{ s.stage }}</span>
                             </td>
                             <td>{{ s.durStr }}</td>
                         </tr>
                     </tbody>
                 </table>
-            </div>
+            </section>
         </template>
     </div>
 </template>
@@ -116,29 +112,58 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { t } from '@nextcloud/l10n'
+import { NcEmptyContent, NcIconSvgWrapper } from '@nextcloud/vue'
 import SleepStageBar from './SleepStageBar.vue'
-
-const STAGE_COLORS = {
-    deep:          '#1e40af',
-    rem:           '#7c3aed',
-    light:         '#60a5fa',
-    awake:         '#fbbf24',
-    unmeasurable:  '#d1d5db',
-}
+import DetailToolbar from './DetailToolbar.vue'
+import LoadingSkeleton from './LoadingSkeleton.vue'
+import LoadError from './LoadError.vue'
+import SportBadge from './SportBadge.vue'
+import { STAGE_COLORS, stageLabel } from '../sleepStages.js'
+import { icons } from '../icons.js'
+import { formatDurationShort, formatDateTime, formatTime } from '../format.js'
+import { deleteItem, reimportItem, fileName } from '../fileActions.js'
 
 export default {
     name: 'SleepDetail',
-    components: { SleepStageBar },
+    components: { SleepStageBar, DetailToolbar, LoadingSkeleton, LoadError, SportBadge, NcEmptyContent, NcIconSvgWrapper },
     props: { id: { type: String, required: true } },
     data() {
         return {
+            icons,
+            stageColors: STAGE_COLORS,
             session: null,
             stages: [],
             loading: true,
-            error: null,
+            error: false,
+            notFound: false,
+            busy: null, // 'reimport' | 'delete' while running
         }
     },
     computed: {
+        busyLabel() {
+            if (this.busy === 'reimport') return t('fit_tracker', 'Re-importing…')
+            if (this.busy === 'delete') return t('fit_tracker', 'Deleting…')
+            return ''
+        },
+        deleteMessage() {
+            // TRANSLATORS: {file} is the name of the .fit file, e.g. "2026-03-01-06-30-00.fit"
+            return t('fit_tracker', 'The sleep session will be removed from FIT Tracker and its file {file} will be moved to the Nextcloud trash. If you restore the file from the trash, the sleep session is imported again on the next sync.', {
+                file: fileName(this.session?.fitFilePath),
+            })
+        },
+        stats() {
+            const s = this.session
+            if (!s) return []
+            const list = [{ label: t('fit_tracker', 'Duration'), value: formatDurationShort(s.duration) }]
+            if (s.score) list.push({ label: t('fit_tracker', 'Sleep score'), value: s.score, unit: '/100' })
+            if (s.hrvScore) list.push({ label: t('fit_tracker', 'HRV score'), value: s.hrvScore })
+            if (s.timeDeep) list.push({ label: t('fit_tracker', 'Deep sleep'), value: formatDurationShort(s.timeDeep) })
+            if (s.timeRem) list.push({ label: t('fit_tracker', 'REM sleep'), value: formatDurationShort(s.timeRem) })
+            if (s.timeLight) list.push({ label: t('fit_tracker', 'Light sleep'), value: formatDurationShort(s.timeLight) })
+            if (s.timeAwake) list.push({ label: t('fit_tracker', 'Time awake'), value: formatDurationShort(s.timeAwake) })
+            return list
+        },
         hasStages() {
             const s = this.session
             return s && ((s.timeDeep || 0) + (s.timeLight || 0) + (s.timeRem || 0) + (s.timeAwake || 0)) > 0
@@ -160,9 +185,9 @@ export default {
                 const tNext = next ? new Date(next.timestamp.replace(' ', 'T')) : new Date(tCurr.getTime() + 60000)
                 const durSec = (tNext - tCurr) / 1000
                 segs.push({
-                    color:   STAGE_COLORS[curr.stage] ?? '#d1d5db',
+                    color:   STAGE_COLORS[curr.stage] ?? STAGE_COLORS.unmeasurable,
                     pct:     Math.max(0.5, durSec / tot * 100),
-                    label:   curr.stage.charAt(0).toUpperCase() + curr.stage.slice(1),
+                    label:   stageLabel(curr.stage),
                     timeStr: tCurr.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
                 })
             }
@@ -196,11 +221,17 @@ export default {
                 const durSec  = tNext ? Math.round((tNext - tCurr) / 1000) : null
                 return {
                     time:   tCurr.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-                    stage:  s.stage.charAt(0).toUpperCase() + s.stage.slice(1),
-                    color:  STAGE_COLORS[s.stage] ?? '#d1d5db',
-                    durStr: durSec ? this.formatMins(durSec) : '–',
+                    stage:  stageLabel(s.stage),
+                    color:  STAGE_COLORS[s.stage] ?? STAGE_COLORS.unmeasurable,
+                    durStr: durSec ? formatDurationShort(durSec) : '–',
                 }
             })
+        },
+    },
+    watch: {
+        // Re-import can land on a new id for the same page component
+        id() {
+            this.load()
         },
     },
     async mounted() {
@@ -208,8 +239,9 @@ export default {
     },
     methods: {
         async load() {
-            this.loading = true
-            this.error   = null
+            this.loading  = true
+            this.error    = false
+            this.notFound = false
             try {
                 const [sessRes, stagesRes] = await Promise.all([
                     axios.get(generateUrl(`/apps/fit_tracker/api/sleep/${this.id}`)),
@@ -218,138 +250,117 @@ export default {
                 this.session = sessRes.data
                 this.stages  = stagesRes.data
             } catch (e) {
-                this.error = e.response?.status === 404 ? 'Sleep session not found' : 'Failed to load sleep data'
+                if (e.response?.status === 404) this.notFound = true
+                else this.error = true
             } finally {
                 this.loading = false
             }
         },
         async deleteSession() {
-            if (!confirm('Delete this sleep session? This cannot be undone.')) return
-            await axios.delete(generateUrl(`/apps/fit_tracker/api/sleep/${this.id}`))
-            this.$router.push('/sleep')
-            window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
+            this.busy = 'delete'
+            const deleted = await deleteItem('sleep', this.id, this.session?.fitFilePath)
+            this.busy = null
+            if (deleted) this.$router.push('/sleep')
         },
-        formatDate(raw) {
-            if (!raw) return ''
-            return new Date(raw).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        async reimport() {
+            // The content is about to be replaced: show the skeleton meanwhile
+            this.busy = 'reimport'
+            this.loading = true
+            const ok = await reimportItem('sleep', this.id, this.$router)
+            this.busy = null
+            if (!ok) this.loading = false
         },
-        formatTime(raw) {
-            if (!raw) return ''
-            return new Date(raw).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-        },
-        formatDuration(seconds) {
-            const h = Math.floor(seconds / 3600)
-            const m = Math.floor((seconds % 3600) / 60)
-            if (h > 0) return `${h}h ${m}m`
-            return `${m}m`
-        },
-        formatMins(seconds) {
-            const h = Math.floor(seconds / 3600)
-            const m = Math.floor((seconds % 3600) / 60)
-            if (h > 0) return `${h}h ${m}m`
-            return `${m}m`
-        },
+        stageLabel,
+        formatDateTime,
+        formatTime,
     },
 }
 </script>
 
 <style scoped>
 .sleep-detail {
-    padding: 20px;
-    padding-top: 52px;
+    padding: 0 var(--ft-gap-5) var(--ft-gap-6);
     max-width: 960px;
 }
-.sleep-detail__back {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 16px;
-}
-.back-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--color-primary-element);
-}
-.delete-btn {
-    background: var(--color-element-error);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    font-size: 14px;
-    color: #fff;
-    padding: 6px 14px;
-}
-.delete-btn:hover { background: var(--color-error-hover); }
 .sleep-detail__header {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: var(--ft-gap-4);
+    margin-bottom: var(--ft-gap-6);
 }
-.sleep-icon { font-size: 40px; }
-.sleep-detail__header h2 { margin: 0 0 4px; }
-.subtitle { color: var(--color-text-maxcontrast); font-size: 14px; }
+.sleep-detail__header h2 {
+    margin: 0 0 var(--ft-gap-1);
+    font-size: 24px;
+    font-weight: bold;
+}
+.subtitle { color: var(--color-text-maxcontrast); }
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--ft-gap-3);
+    margin: 0 0 var(--ft-gap-6);
 }
 .stat {
     background: var(--color-background-dark);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: var(--border-radius-element);
+    padding: var(--ft-gap-3);
     text-align: center;
 }
 .stat__label {
-    font-size: 11px;
-    text-transform: uppercase;
+    font-size: var(--font-size-small);
     color: var(--color-text-maxcontrast);
-    margin-bottom: 4px;
+    margin-bottom: var(--ft-gap-1);
 }
 .stat__value {
+    margin: 0;
     font-size: 20px;
-    font-weight: 600;
+    font-weight: bold;
 }
-.stat__unit { font-size: 13px; font-weight: 400; }
+.stat__unit { font-size: var(--font-size-small); font-weight: normal; }
 /* Stage distribution bar */
-.dist-bar { height: 16px; border-radius: 8px; }
+.dist-bar { height: var(--ft-gap-4); border-radius: var(--border-radius-element); }
 .stage-legend {
     display: flex;
-    gap: 16px;
-    margin-top: 8px;
-    font-size: 12px;
+    flex-wrap: wrap;
+    gap: var(--ft-gap-4);
+    margin-top: var(--ft-gap-2);
+    font-size: var(--font-size-small);
 }
-.legend-item { display: flex; align-items: center; gap: 4px; }
-.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.legend-item,
+.stage-name { display: inline-flex; align-items: center; gap: var(--ft-gap-1); }
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--border-radius-pill);
+    display: inline-block;
+    flex-shrink: 0;
+}
 /* Timeline */
 .timeline {
     position: relative;
-    margin-bottom: 12px;
+    margin-bottom: var(--ft-gap-3);
 }
 .timeline__track {
     display: flex;
-    height: 32px;
-    border-radius: 6px;
+    height: var(--ft-gap-8);
+    border-radius: var(--border-radius-element);
     overflow: hidden;
     gap: 1px;
 }
 .timeline__seg {
-    cursor: default;
     min-width: 2px;
     transition: opacity 0.1s;
 }
 .timeline__seg:hover { opacity: 0.8; }
 .timeline__labels {
     position: relative;
-    height: 20px;
-    margin-top: 4px;
+    height: var(--ft-gap-5);
+    margin-top: var(--ft-gap-1);
 }
 .timeline__mark {
     position: absolute;
     transform: translateX(-50%);
-    font-size: 10px;
+    font-size: var(--font-size-small);
     color: var(--color-text-maxcontrast);
     white-space: nowrap;
 }
@@ -357,23 +368,16 @@ export default {
 .stages-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
-    margin-top: 16px;
+    margin-top: var(--ft-gap-4);
 }
 .stages-table th, .stages-table td {
-    padding: 6px 12px;
-    text-align: left;
+    padding: var(--ft-gap-2) var(--ft-gap-3);
+    text-align: start;
     border-bottom: 1px solid var(--color-border);
 }
-.stages-table th { font-weight: 600; color: var(--color-text-maxcontrast); }
-.stage-badge {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    color: #fff;
-    font-weight: 500;
+.stages-table th {
+    font-size: var(--font-size-small);
+    font-weight: bold;
+    color: var(--color-text-maxcontrast);
 }
-.loading, .error { padding: 40px; text-align: center; }
-.error { color: var(--color-error); }
 </style>

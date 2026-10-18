@@ -1,31 +1,46 @@
 <template>
-    <NcModal size="normal" name="Share activity" @close="$emit('close')">
+    <NcModal size="normal" :name="t('fit_tracker', 'Share activity')" @close="$emit('close')">
         <div class="share-card">
-            <canvas ref="canvasEl" class="share-card__canvas" :width="CANVAS_W" :height="CANVAS_H"></canvas>
+            <canvas
+                ref="canvasEl"
+                class="share-card__canvas"
+                :width="CANVAS_W"
+                :height="CANVAS_H"
+                role="img"
+                :aria-label="t('fit_tracker', 'Preview of the image to share')"
+            ></canvas>
             <div class="share-card__actions">
-                <NcButton type="primary" @click="share">Share</NcButton>
+                <NcButton variant="primary" @click="share">
+                    <template #icon>
+                        <NcIconSvgWrapper :svg="icons.share" :size="20" />
+                    </template>
+                    {{ t('fit_tracker', 'Share image') }}
+                </NcButton>
             </div>
         </div>
     </NcModal>
 </template>
 
 <script>
-import { NcModal, NcButton } from '@nextcloud/vue'
+import { NcModal, NcButton, NcIconSvgWrapper } from '@nextcloud/vue'
+import { t } from '@nextcloud/l10n'
 import { sportIcon, sportLabel, sportColor, SPEED_NOT_PACE_SPORTS } from '../sports.js'
+import { icons, iconImage } from '../icons.js'
+import { formatDistance, formatDurationClock, formatPace, formatSpeed } from '../format.js'
 
 const CANVAS_W = 1080
 const CANVAS_H = 1920
 
 export default {
     name: 'ShareCard',
-    components: { NcModal, NcButton },
+    components: { NcModal, NcButton, NcIconSvgWrapper },
     props: {
         activity:    { type: Object, required: true },
         trackpoints: { type: Array, default: () => [] },
     },
     emits: ['close'],
     data() {
-        return { CANVAS_W, CANVAS_H }
+        return { CANVAS_W, CANVAS_H, icons }
     },
     mounted() {
         this.draw()
@@ -122,17 +137,6 @@ export default {
 
             return true
         },
-        loadEmojiImage(emoji, px) {
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}">`
-                + `<text x="50%" y="53%" font-size="${px * 0.82}" text-anchor="middle" dominant-baseline="central">${emoji}</text>`
-                + `</svg>`
-            return new Promise(resolve => {
-                const img = new Image()
-                img.onload = () => resolve(img)
-                img.onerror = () => resolve(null)
-                img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg)
-            })
-        },
         loadTileImage(url) {
             return new Promise(resolve => {
                 const img = new Image()
@@ -191,12 +195,10 @@ export default {
             const cx = CANVAS_W / 2
             ctx.textAlign = 'center'
 
-            // Canvas 2D's fillText() unreliably renders color emoji (esp. Apple
-            // Color Emoji on iOS Safari — glyphs silently fail to paint). Rendering
-            // the emoji as SVG text and drawing the rasterized result instead routes
-            // it through the normal, reliable HTML/SVG text-layout engine.
+            // The card is an exported image with its own dark design, so the
+            // sport icon is drawn in white regardless of the Nextcloud theme.
             const iconSize = 140
-            const iconImg = await this.loadEmojiImage(sportIcon(this.activity.sport), iconSize)
+            const iconImg = await iconImage(sportIcon(this.activity.sport), '#ffffff', iconSize)
             if (iconImg) ctx.drawImage(iconImg, cx - iconSize / 2, 45, iconSize, iconSize)
 
             ctx.fillStyle = '#ffffff'
@@ -266,11 +268,11 @@ export default {
                 ctx.textAlign = 'center'
                 ctx.fillStyle = 'rgba(255,255,255,0.6)'
                 ctx.font = '600 30px -apple-system, "Segoe UI", Roboto, sans-serif'
-                ctx.fillText('DISTANCE', cx, top)
+                ctx.fillText(t('fit_tracker', 'Distance').toLocaleUpperCase(), cx, top)
 
                 ctx.fillStyle = '#ffffff'
                 ctx.font = '700 130px -apple-system, "Segoe UI", Roboto, sans-serif'
-                ctx.fillText(this.formatDistance(a.distance), cx, top + 140)
+                ctx.fillText(formatDistance(a.distance), cx, top + 140)
             }
 
             const secondary = this.secondaryStats()
@@ -293,12 +295,13 @@ export default {
         secondaryStats() {
             const a = this.activity
             const stats = []
-            if (a.duration) stats.push({ label: 'DURATION', value: this.formatDuration(a.duration) })
+            // Short labels: three of them share one row of the image
+            if (a.duration) stats.push({ label: t('fit_tracker', 'Duration'), value: formatDurationClock(a.duration) })
             const paceOrSpeed = this.paceOrSpeed()
-            if (paceOrSpeed) stats.push({ label: SPEED_NOT_PACE_SPORTS.includes(a.sport) ? 'AVG SPEED' : 'AVG PACE', value: paceOrSpeed })
-            if (a.elevationGain) stats.push({ label: 'ELEVATION', value: `+${Math.round(a.elevationGain)} m` })
-            if (a.avgHr) stats.push({ label: 'AVG HR', value: `${a.avgHr} bpm` })
-            return stats.slice(0, 3)
+            if (paceOrSpeed) stats.push({ label: SPEED_NOT_PACE_SPORTS.includes(a.sport) ? t('fit_tracker', 'Speed') : t('fit_tracker', 'Pace'), value: paceOrSpeed })
+            if (a.elevationGain) stats.push({ label: t('fit_tracker', 'Elevation'), value: t('fit_tracker', '+{meters} m', { meters: Math.round(a.elevationGain) }) })
+            if (a.avgHr) stats.push({ label: t('fit_tracker', 'Heart rate'), value: t('fit_tracker', '{bpm} bpm', { bpm: a.avgHr }) })
+            return stats.slice(0, 3).map(st => ({ ...st, label: st.label.toLocaleUpperCase() }))
         },
         roundedRect(ctx, x, y, w, h, r) {
             ctx.beginPath()
@@ -322,27 +325,13 @@ export default {
             let speed = a.avgSpeed || null
             if (!speed && a.distance && a.duration > 0) speed = a.distance / a.duration * 3600
             if (!speed) return null
-            if (SPEED_NOT_PACE_SPORTS.includes(a.sport)) return `${speed.toFixed(1)} km/h`
+            if (SPEED_NOT_PACE_SPORTS.includes(a.sport)) return formatSpeed(speed)
             if (['gym', 'swimming', 'breathwork', 'meditation'].includes(a.sport)) return null
-            const minPerKm = 60 / speed
-            const m = Math.floor(minPerKm)
-            const s = Math.round((minPerKm - m) * 60)
-            return `${m}:${String(s).padStart(2, '0')} /km`
+            return formatPace(speed)
         },
         formatDate(raw) {
             if (!raw) return ''
             return new Date(raw).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
-        },
-        formatDistance(km) {
-            if (km < 1) return Math.round(km * 1000) + ' m'
-            return km.toFixed(2) + ' km'
-        },
-        formatDuration(s) {
-            const h = Math.floor(s / 3600)
-            const m = Math.floor((s % 3600) / 60)
-            const sec = s % 60
-            if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-            return `${m}:${String(sec).padStart(2, '0')}`
         },
         filename() {
             return `${this.activity.sport || 'activity'}-${this.activity.startTime?.slice(0, 10) || ''}.png`
@@ -353,7 +342,7 @@ export default {
 
                 if (navigator.canShare && navigator.canShare({ files: [file] })) {
                     try {
-                        await navigator.share({ files: [file], title: this.activity.name || 'Activity' })
+                        await navigator.share({ files: [file], title: this.activity.name || t('fit_tracker', 'Activity') })
                         return
                     } catch (e) {
                         if (e.name === 'AbortError') return
@@ -378,16 +367,16 @@ export default {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
-    padding: 16px;
+    gap: var(--ft-gap-4);
+    padding: var(--ft-gap-4);
 }
 .share-card__canvas {
     width: auto;
     height: auto;
     max-width: min(380px, 100%);
     max-height: 70vh;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border-radius: var(--border-radius-container);
+    box-shadow: 0 0 var(--ft-gap-5) var(--color-box-shadow);
 }
 .share-card__actions {
     display: flex;

@@ -1,20 +1,31 @@
 <template>
     <div class="sleep-month-chart">
-        <div class="sleep-month-chart__header">
-            <button class="pagination__btn" @click="monthOffset--">&#8592;</button>
-            <span class="sleep-month-chart__title">{{ monthTitle }}</span>
-            <button class="pagination__btn" :disabled="!canGoForward" @click="monthOffset++">&#8594;</button>
-        </div>
-        <canvas ref="canvas"></canvas>
+        <PageNav
+            class="sleep-month-chart__header"
+            :previous-label="t('fit_tracker', 'Previous month')"
+            :next-label="t('fit_tracker', 'Next month')"
+            :has-next="canGoForward"
+            @previous="monthOffset--"
+            @next="monthOffset++"
+        >
+            {{ monthTitle }}
+        </PageNav>
+        <canvas ref="canvas" role="img" :aria-label="t('fit_tracker', 'Sleep duration per night, by stage')"></canvas>
     </div>
 </template>
 
 <script>
 import { Chart, BarController, BarElement, LinearScale, CategoryScale, Tooltip, Legend } from 'chart.js'
+import { t } from '@nextcloud/l10n'
+import PageNav from './PageNav.vue'
+import { STAGE_COLORS, stageLabel } from '../sleepStages.js'
+import { baseChartOptions } from '../chartTheme.js'
+import { formatDurationShort } from '../format.js'
 Chart.register(BarController, BarElement, LinearScale, CategoryScale, Tooltip, Legend)
 
 export default {
     name: 'SleepMonthChart',
+    components: { PageNav },
     props: {
         sessions: { type: Array, required: true },
     },
@@ -49,6 +60,7 @@ export default {
         rebuild() {
             this.chart?.destroy()
             const { labels, datasets, scoreData, hrvData } = this.buildMonthData()
+            const base = baseChartOptions()
             this.chart = new Chart(this.$refs.canvas, {
                 type: 'bar',
                 data: { labels, datasets },
@@ -59,30 +71,25 @@ export default {
                         legend: {
                             display: true,
                             position: 'bottom',
-                            labels: { font: { size: 11 }, boxWidth: 12, padding: 10 },
+                            labels: { color: base.theme.mainText, font: base.ticks.font, boxWidth: 12, padding: 12 },
                         },
                         tooltip: {
+                            ...base.tooltip,
                             callbacks: {
                                 label: ctx => {
                                     const v = ctx.parsed.y
                                     if (!v) return null
-                                    const h = Math.floor(v / 60)
-                                    const m = v % 60
-                                    const dur = h > 0 ? `${h}h ${m}m` : `${m}m`
-                                    // append score on total bar
-                                    const score = scoreData[ctx.dataIndex]
-                                    if (ctx.dataset.label === 'Total' && score) {
-                                        return `Total: ${dur}  ·  Score ${score}/100`
-                                    }
-                                    return `${ctx.dataset.label}: ${dur}`
+                                    const dur = formatDurationShort(v * 60)
+                                    // TRANSLATORS: Chart tooltip, e.g. "Deep: 1h 20m"
+                                    return t('fit_tracker', '{stage}: {duration}', { stage: ctx.dataset.label, duration: dur })
                                 },
                                 afterBody: (items) => {
                                     const idx = items[0]?.dataIndex
                                     const score = scoreData[idx]
                                     const hrv = hrvData[idx]
                                     const lines = []
-                                    if (score) lines.push(`Sleep score: ${score}/100`)
-                                    if (hrv)   lines.push(`HRV: ${hrv}`)
+                                    if (score) lines.push(t('fit_tracker', 'Sleep score: {score}/100', { score }))
+                                    if (hrv)   lines.push(t('fit_tracker', 'HRV: {score}', { score: hrv }))
                                     return lines
                                 },
                             },
@@ -92,20 +99,17 @@ export default {
                         x: {
                             stacked: true,
                             grid: { display: false },
-                            ticks: { font: { size: 11 }, autoSkip: true, maxRotation: 0 },
+                            ticks: { ...base.ticks, autoSkip: true, maxRotation: 0 },
                         },
                         y: {
                             stacked: true,
                             beginAtZero: true,
                             ticks: {
-                                font: { size: 11 },
-                                callback: v => {
-                                    const h = Math.floor(v / 60)
-                                    const m = v % 60
-                                    return h > 0 ? (m ? `${h}h${m}m` : `${h}h`) : `${m}m`
-                                },
+                                ...base.ticks,
+                                callback: v => formatDurationShort(v * 60),
                             },
-                            grid: { color: 'rgba(0,0,0,0.05)' },
+                            grid: base.grid,
+                            border: { color: base.grid.color },
                         },
                     },
                 },
@@ -151,11 +155,12 @@ export default {
             })
 
             const datasets = [
-                { label: 'Deep',  data: deep,  backgroundColor: '#1e40af', stack: 'sleep', borderRadius: 0 },
-                { label: 'REM',   data: rem,   backgroundColor: '#7c3aed', stack: 'sleep', borderRadius: 0 },
-                { label: 'Light', data: light, backgroundColor: '#60a5fa', stack: 'sleep', borderRadius: 0 },
-                { label: 'Awake', data: awake, backgroundColor: '#fbbf24', stack: 'sleep', borderRadius: 0 },
-                { label: 'Total', data: total, backgroundColor: '#94a3b8', stack: 'sleep', borderRadius: 4 },
+                { label: stageLabel('deep'),  data: deep,  backgroundColor: STAGE_COLORS.deep,  stack: 'sleep', borderRadius: 0 },
+                { label: stageLabel('rem'),   data: rem,   backgroundColor: STAGE_COLORS.rem,   stack: 'sleep', borderRadius: 0 },
+                { label: stageLabel('light'), data: light, backgroundColor: STAGE_COLORS.light, stack: 'sleep', borderRadius: 0 },
+                { label: stageLabel('awake'), data: awake, backgroundColor: STAGE_COLORS.awake, stack: 'sleep', borderRadius: 0 },
+                // Nights without stage data: total duration only
+                { label: t('fit_tracker', 'Total'), data: total, backgroundColor: '#94a3b8', stack: 'sleep', borderRadius: 4 },
             ]
 
             return { labels, datasets, scoreData, hrvData }
@@ -169,31 +174,7 @@ export default {
     width: 100%;
 }
 .sleep-month-chart__header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    margin-bottom: 12px;
+    max-width: 320px;
+    margin: 0 auto var(--ft-gap-3);
 }
-.sleep-month-chart__title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--color-text-maxcontrast);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    min-width: 160px;
-    text-align: center;
-}
-.pagination__btn {
-    background: var(--color-main-background);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius);
-    padding: 6px 14px;
-    cursor: pointer;
-    font-size: 16px;
-    color: var(--color-main-text);
-    transition: background 0.15s;
-}
-.pagination__btn:hover:not(:disabled) { background: var(--color-background-dark); }
-.pagination__btn:disabled { opacity: 0.4; cursor: default; }
 </style>

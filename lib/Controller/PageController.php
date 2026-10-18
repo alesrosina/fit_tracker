@@ -23,6 +23,7 @@ class PageController extends Controller {
     public function index(): TemplateResponse {
         Util::addScript(Application::APP_ID, 'fit_tracker-fit_tracker-main');
         Util::addStyle(Application::APP_ID, 'fit_tracker-main');
+        Util::addTranslations(Application::APP_ID);
         return new TemplateResponse(Application::APP_ID, 'index');
     }
 }

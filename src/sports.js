@@ -1,55 +1,66 @@
+import { t } from '@nextcloud/l10n'
+
+// Labels are getters so t() runs on read, after the locale is loaded.
+const sport = (value, label, icon, color) => ({
+    value,
+    get label() { return label() },
+    icon,
+    color,
+})
+
 // Curated icon/color entries for the sports users are most likely to import.
 // FitParserService now recognizes the full Garmin FIT sport enum (see
 // lib/Service/FitSportProfile.php) and passes through anything not in this
 // list as-is, so sports missing here still work — they just fall back to a
-// generic icon/color and a title-cased label (see sportIcon/Label below).
+// generic icon/color and a sentence-cased label (see sportIcon/Label below).
+// `icon` is a Material Symbols key from icons.js.
 export const SPORTS = [
-    { value: 'running',    label: 'Running',    icon: '🏃', color: '#ef4444' },
-    { value: 'cycling',    label: 'Cycling',    icon: '🚴', color: '#0082c9' },
-    { value: 'hiking',     label: 'Hike',       icon: '🥾', color: '#22c55e' },
-    { value: 'walking',    label: 'Walk',       icon: '🚶', color: '#14b8a6' },
-    { value: 'swimming',   label: 'Swimming',   icon: '🏊', color: '#06b6d4' },
-    { value: 'gym',        label: 'Gym',        icon: '🏋️', color: '#f97316' },
-    { value: 'breathwork', label: 'Breathwork', icon: '🧘', color: '#8b5cf6' },
-    { value: 'meditation', label: 'Meditation', icon: '🕉️', color: '#6366f1' },
-    { value: 'skiing',     label: 'Skiing',     icon: '⛷️', color: '#38bdf8' },
-    { value: 'rowing',                  label: 'Rowing',                  icon: '🚣', color: '#0ea5e9' },
-    { value: 'golf',                    label: 'Golf',                    icon: '⛳', color: '#65a30d' },
-    { value: 'sailing',                 label: 'Sailing',                 icon: '⛵', color: '#0369a1' },
-    { value: 'kayaking',                label: 'Kayaking',                icon: '🛶', color: '#0891b2' },
-    { value: 'canoeing',                label: 'Canoeing',                icon: '🛶', color: '#0e7490' },
-    { value: 'surfing',                 label: 'Surfing',                 icon: '🏄', color: '#22d3ee' },
-    { value: 'windsurfing',             label: 'Windsurfing',             icon: '🏄', color: '#0284c7' },
-    { value: 'kitesurfing',             label: 'Kitesurfing',             icon: '🪁', color: '#7c3aed' },
-    { value: 'stand_up_paddleboarding', label: 'Paddleboarding',          icon: '🏄', color: '#2dd4bf' },
-    { value: 'water_skiing',            label: 'Water Skiing',            icon: '🎿', color: '#3b82f6' },
-    { value: 'wakeboarding',            label: 'Wakeboarding',            icon: '🏄', color: '#4f46e5' },
-    { value: 'wakesurfing',             label: 'Wakesurfing',             icon: '🏄', color: '#4338ca' },
-    { value: 'boating',                 label: 'Boating',                 icon: '🚤', color: '#1d4ed8' },
-    { value: 'motorcycling',            label: 'Motorcycling',            icon: '🏍️', color: '#78716c' },
-    { value: 'driving',                 label: 'Driving',                 icon: '🚗', color: '#57534e' },
-    { value: 'horseback_riding',        label: 'Horseback Riding',        icon: '🐎', color: '#a16207' },
-    { value: 'tennis',                  label: 'Tennis',                  icon: '🎾', color: '#facc15' },
-    { value: 'soccer',                  label: 'Soccer',                  icon: '⚽', color: '#16a34a' },
-    { value: 'basketball',              label: 'Basketball',              icon: '🏀', color: '#ea580c' },
-    { value: 'baseball',                label: 'Baseball',                icon: '⚾', color: '#dc2626' },
-    { value: 'volleyball',              label: 'Volleyball',              icon: '🏐', color: '#eab308' },
-    { value: 'american_football',       label: 'American Football',      icon: '🏈', color: '#7c2d12' },
-    { value: 'rugby',                   label: 'Rugby',                   icon: '🏉', color: '#15803d' },
-    { value: 'cricket',                 label: 'Cricket',                 icon: '🏏', color: '#059669' },
-    { value: 'hockey',                  label: 'Hockey',                  icon: '🏒', color: '#1e3a8a' },
-    { value: 'rock_climbing',           label: 'Rock Climbing',           icon: '🧗', color: '#92400e' },
-    { value: 'mountaineering',          label: 'Mountaineering',          icon: '🏔️', color: '#57534e' },
-    { value: 'ice_skating',             label: 'Ice Skating',             icon: '⛸️', color: '#7dd3fc' },
-    { value: 'boxing',                  label: 'Boxing',                  icon: '🥊', color: '#b91c1c' },
-    { value: 'mixed_martial_arts',      label: 'Martial Arts',            icon: '🥋', color: '#991b1b' },
-    { value: 'fishing',                 label: 'Fishing',                 icon: '🎣', color: '#0f766e' },
-    { value: 'diving',                  label: 'Diving',                  icon: '🤿', color: '#075985' },
-    { value: 'snorkeling',              label: 'Snorkeling',              icon: '🤿', color: '#0c4a6e' },
-    { value: 'archery',                 label: 'Archery',                 icon: '🏹', color: '#ca8a04' },
-    { value: 'disc_golf',               label: 'Disc Golf',               icon: '🥏', color: '#84cc16' },
-    { value: 'dance',                   label: 'Dance',                   icon: '💃', color: '#ec4899' },
-    { value: 'generic',                 label: 'Activity',                icon: '🏅', color: '#94a3b8' },
+    sport('running', () => t('fit_tracker', 'Running'), 'directions_run', '#ef4444'),
+    sport('cycling', () => t('fit_tracker', 'Cycling'), 'directions_bike', '#0082c9'),
+    sport('hiking', () => t('fit_tracker', 'Hike'), 'hiking', '#22c55e'),
+    sport('walking', () => t('fit_tracker', 'Walk'), 'directions_walk', '#14b8a6'),
+    sport('swimming', () => t('fit_tracker', 'Swimming'), 'pool', '#06b6d4'),
+    sport('gym', () => t('fit_tracker', 'Gym'), 'fitness_center', '#f97316'),
+    sport('breathwork', () => t('fit_tracker', 'Breathwork'), 'air', '#8b5cf6'),
+    sport('meditation', () => t('fit_tracker', 'Meditation'), 'self_improvement', '#6366f1'),
+    sport('skiing', () => t('fit_tracker', 'Skiing'), 'downhill_skiing', '#38bdf8'),
+    sport('rowing', () => t('fit_tracker', 'Rowing'), 'rowing', '#0ea5e9'),
+    sport('golf', () => t('fit_tracker', 'Golf'), 'sports_golf', '#65a30d'),
+    sport('sailing', () => t('fit_tracker', 'Sailing'), 'sailing', '#0369a1'),
+    sport('kayaking', () => t('fit_tracker', 'Kayaking'), 'kayaking', '#0891b2'),
+    sport('canoeing', () => t('fit_tracker', 'Canoeing'), 'kayaking', '#0e7490'),
+    sport('surfing', () => t('fit_tracker', 'Surfing'), 'surfing', '#22d3ee'),
+    sport('windsurfing', () => t('fit_tracker', 'Windsurfing'), 'surfing', '#0284c7'),
+    sport('kitesurfing', () => t('fit_tracker', 'Kitesurfing'), 'kitesurfing', '#7c3aed'),
+    sport('stand_up_paddleboarding', () => t('fit_tracker', 'Paddleboarding'), 'surfing', '#2dd4bf'),
+    sport('water_skiing', () => t('fit_tracker', 'Water skiing'), 'surfing', '#3b82f6'),
+    sport('wakeboarding', () => t('fit_tracker', 'Wakeboarding'), 'surfing', '#4f46e5'),
+    sport('wakesurfing', () => t('fit_tracker', 'Wakesurfing'), 'surfing', '#4338ca'),
+    sport('boating', () => t('fit_tracker', 'Boating'), 'directions_boat', '#1d4ed8'),
+    sport('motorcycling', () => t('fit_tracker', 'Motorcycling'), 'motorcycle', '#78716c'),
+    sport('driving', () => t('fit_tracker', 'Driving'), 'directions_car', '#57534e'),
+    sport('horseback_riding', () => t('fit_tracker', 'Horseback riding'), 'sports_and_outdoors', '#a16207'),
+    sport('tennis', () => t('fit_tracker', 'Tennis'), 'sports_tennis', '#facc15'),
+    sport('soccer', () => t('fit_tracker', 'Soccer'), 'sports_soccer', '#16a34a'),
+    sport('basketball', () => t('fit_tracker', 'Basketball'), 'sports_basketball', '#ea580c'),
+    sport('baseball', () => t('fit_tracker', 'Baseball'), 'sports_baseball', '#dc2626'),
+    sport('volleyball', () => t('fit_tracker', 'Volleyball'), 'sports_volleyball', '#eab308'),
+    sport('american_football', () => t('fit_tracker', 'American football'), 'sports_football', '#7c2d12'),
+    sport('rugby', () => t('fit_tracker', 'Rugby'), 'sports_rugby', '#15803d'),
+    sport('cricket', () => t('fit_tracker', 'Cricket'), 'sports_cricket', '#059669'),
+    sport('hockey', () => t('fit_tracker', 'Hockey'), 'sports_hockey', '#1e3a8a'),
+    sport('rock_climbing', () => t('fit_tracker', 'Rock climbing'), 'mountain_flag', '#92400e'),
+    sport('mountaineering', () => t('fit_tracker', 'Mountaineering'), 'mountain_flag', '#57534e'),
+    sport('ice_skating', () => t('fit_tracker', 'Ice skating'), 'ice_skating', '#7dd3fc'),
+    sport('boxing', () => t('fit_tracker', 'Boxing'), 'sports_mma', '#b91c1c'),
+    sport('mixed_martial_arts', () => t('fit_tracker', 'Martial arts'), 'sports_martial_arts', '#991b1b'),
+    sport('fishing', () => t('fit_tracker', 'Fishing'), 'phishing', '#0f766e'),
+    sport('diving', () => t('fit_tracker', 'Diving'), 'scuba_diving', '#075985'),
+    sport('snorkeling', () => t('fit_tracker', 'Snorkeling'), 'scuba_diving', '#0c4a6e'),
+    sport('archery', () => t('fit_tracker', 'Archery'), 'target', '#ca8a04'),
+    sport('disc_golf', () => t('fit_tracker', 'Disc golf'), 'sports_golf', '#84cc16'),
+    sport('dance', () => t('fit_tracker', 'Dance'), 'music_note', '#ec4899'),
+    sport('generic', () => t('fit_tracker', 'Activity'), 'exercise', '#94a3b8'),
 ]
 
 // Sports where the natural unit is speed (km/h) rather than pace (min/km) —
@@ -66,11 +77,12 @@ export const SPEED_NOT_PACE_SPORTS = [
 
 export const SPORT_MAP = Object.fromEntries(SPORTS.map(s => [s.value, s]))
 
-export const sportIcon  = v => SPORT_MAP[v]?.icon  ?? '🏅'
+export const sportIcon  = v => SPORT_MAP[v]?.icon  ?? 'exercise'
 export const sportColor = v => SPORT_MAP[v]?.color ?? '#94a3b8'
-export const sportLabel = v => SPORT_MAP[v]?.label ?? titleCase(v)
+export const sportLabel = v => SPORT_MAP[v]?.label ?? sentenceCase(v)
 
-function titleCase(v) {
+function sentenceCase(v) {
     if (!v) return v
-    return v.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    const words = v.split('_').join(' ')
+    return words.charAt(0).toUpperCase() + words.slice(1)
 }

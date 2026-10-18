@@ -12,6 +12,8 @@ use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
+use OCP\Files\NotFoundException;
+use OCP\Files\NotPermittedException;
 use OCP\IRequest;
 use OCP\IUserSession;
 
@@ -130,6 +132,38 @@ class ActivityController extends Controller {
             return new DataResponse([], Http::STATUS_NO_CONTENT);
         } catch (DoesNotExistException) {
             return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+        } catch (NotPermittedException) {
+            return new DataResponse(['error' => 'file_not_deletable'], Http::STATUS_FORBIDDEN);
+        }
+    }
+
+    #[NoAdminRequired]
+    public function reimport(int $id): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        try {
+            return new DataResponse($this->activityService->reimportForUser($id, $userId));
+        } catch (DoesNotExistException) {
+            return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+        } catch (NotFoundException) {
+            return new DataResponse(['error' => 'file_missing'], Http::STATUS_CONFLICT);
+        } catch (\Throwable $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[NoAdminRequired]
+    public function reimportAll(): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        try {
+            return new DataResponse($this->activityService->reimportAll($userId));
+        } catch (\Throwable $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
         }
     }
 

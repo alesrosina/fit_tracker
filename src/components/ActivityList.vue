@@ -1,84 +1,117 @@
 <template>
     <div class="activity-list">
         <h2 class="page-title">{{ pageTitle }}</h2>
-        <div v-if="loading" class="loading"></div>
-        <div v-else-if="error" class="error">{{ error }}</div>
+        <LoadingSkeleton v-if="loading" />
+        <LoadError
+            v-else-if="error"
+            :heading="t('fit_tracker', 'Could not load activities')"
+            :message="t('fit_tracker', 'Check your connection and try again.')"
+            @retry="load"
+        />
         <template v-else>
-            <div v-if="syncErrors.length > 0" class="sync-errors">
-                <strong>Import errors:</strong>
+            <NcNoteCard
+                v-if="syncErrors.length > 0"
+                type="warning"
+                :heading="n('fit_tracker', '%n file could not be imported', '%n files could not be imported', syncErrors.length)"
+                class="sync-errors"
+            >
                 <ul>
                     <li v-for="e in syncErrors" :key="e">{{ e }}</li>
                 </ul>
-            </div>
+            </NcNoteCard>
 
             <div v-if="activities.length > 0" class="dashboard">
                 <div class="dashboard-row">
-                    <div class="dashboard-panel">
-                        <h3 class="panel-title">{{ monthTitle }}</h3>
+                    <section class="dashboard-panel">
                         <ActivityCalendar :activities="filtered" @select-date="calendarSelectedDate = $event" />
-                    </div>
-                    <div class="dashboard-panel">
+                    </section>
+                    <section class="dashboard-panel">
                         <ActivityWeekChart :activities="filtered" :anchorDate="calendarSelectedDate" />
-                    </div>
+                    </section>
                 </div>
-                <div v-if="lastSleep" class="dashboard-row dashboard-row--sleep">
-                    <div class="dashboard-panel sleep-panel" @click="$router.push('/sleep/' + lastSleep.id)">
-                        <h3 class="panel-title">Last Sleep</h3>
-                        <div class="sleep-summary">
-                            <span class="sleep-summary__icon">🛌</span>
-                            <div class="sleep-summary__body">
-                                <div class="sleep-summary__top">
-                                    <span class="sleep-summary__dur">{{ formatDuration(lastSleep.duration) }}</span>
-                                    <span v-if="lastSleep.hrvScore" class="sleep-summary__hrv">💚 HRV {{ lastSleep.hrvScore }}</span>
-                                </div>
-                                <div class="sleep-summary__meta">
-                                    <span>{{ formatDate(lastSleep.startTime) }}</span>
-                                    <span v-if="lastSleep.score"> · Score {{ lastSleep.score }}/100</span>
-                                </div>
-                                <SleepStageBar
-                                    v-if="(lastSleep.timeDeep || 0) + (lastSleep.timeLight || 0) + (lastSleep.timeRem || 0) + (lastSleep.timeAwake || 0) > 0"
-                                    :timeDeep="lastSleep.timeDeep"
-                                    :timeLight="lastSleep.timeLight"
-                                    :timeRem="lastSleep.timeRem"
-                                    :timeAwake="lastSleep.timeAwake"
-                                    style="margin-top: 6px;"
-                                />
+                <router-link
+                    v-if="lastSleep"
+                    :to="'/sleep/' + lastSleep.id"
+                    class="dashboard-panel sleep-panel"
+                >
+                    <h3 class="panel-title">{{ t('fit_tracker', 'Last sleep') }}</h3>
+                    <div class="sleep-summary">
+                        <SportBadge icon="bedtime" :color="sleepColor" :size="24" />
+                        <div class="sleep-summary__body">
+                            <div class="sleep-summary__top">
+                                <span class="sleep-summary__dur">{{ formatDurationShort(lastSleep.duration) }}</span>
+                                <span v-if="lastSleep.hrvScore" class="sleep-summary__hrv">
+                                    {{ t('fit_tracker', 'HRV {score}', { score: lastSleep.hrvScore }) }}
+                                </span>
                             </div>
+                            <div class="sleep-summary__meta">
+                                <span>{{ formatDay(lastSleep.startTime) }}</span>
+                                <span v-if="lastSleep.score"> · {{ t('fit_tracker', 'Score {score}/100', { score: lastSleep.score }) }}</span>
+                            </div>
+                            <SleepStageBar
+                                v-if="hasStageDurations(lastSleep)"
+                                :timeDeep="lastSleep.timeDeep"
+                                :timeLight="lastSleep.timeLight"
+                                :timeRem="lastSleep.timeRem"
+                                :timeAwake="lastSleep.timeAwake"
+                                class="sleep-summary__stagebar"
+                            />
                         </div>
                     </div>
-                </div>
+                </router-link>
             </div>
 
-            <div v-if="filtered.length === 0" class="empty">
-                No activities found. Configure a folder in Settings.
-            </div>
+            <NcEmptyContent
+                v-if="filtered.length === 0"
+                :name="emptyTitle"
+                :description="emptyDescription"
+            >
+                <template #icon>
+                    <NcIconSvgWrapper :svg="icons.exercise" />
+                </template>
+                <template #action>
+                    <NcButton v-if="navData.folderPath === ''" variant="primary" @click="openSettings">
+                        {{ t('fit_tracker', 'Choose folder') }}
+                    </NcButton>
+                    <NcButton v-else-if="!$route.query.sport" @click="load">
+                        {{ t('fit_tracker', 'Sync now') }}
+                    </NcButton>
+                </template>
+            </NcEmptyContent>
             <template v-else>
-                <h3 class="list-title">Activities</h3>
+                <h3 class="list-title">{{ t('fit_tracker', 'Activities') }}</h3>
                 <div class="activity-grid">
-                    <div
+                    <router-link
                         v-for="activity in paginated"
                         :key="activity.id"
+                        :to="'/activity/' + activity.id"
                         class="activity-card"
-                        @click="$router.push('/activity/' + activity.id)"
                     >
-                        <div class="activity-card__icon">{{ sportIcon(activity.sport) }}</div>
+                        <SportBadge :icon="sportIcon(activity.sport)" :color="sportColor(activity.sport)" :size="24" />
                         <div class="activity-card__body">
                             <div class="activity-card__name">{{ activity.name }}</div>
                             <div class="activity-card__date">{{ formatTimeRange(activity.startTime, activity.duration) }}</div>
                             <div class="activity-card__stats">
                                 <span v-if="activity.distance">{{ formatDistance(activity.distance) }}</span>
-                                <span v-if="activity.duration">{{ formatDuration(activity.duration) }}</span>
-                                <span v-if="activity.avgHr">❤ {{ activity.avgHr }} bpm</span>
-                                <span v-if="activity.calories">🔥 {{ activity.calories }} kcal</span>
+                                <span v-if="activity.duration">{{ formatDurationShort(activity.duration, true) }}</span>
+                                <span v-if="activity.avgHr">{{ t('fit_tracker', '{bpm} bpm', { bpm: activity.avgHr }) }}</span>
+                                <span v-if="activity.calories">{{ t('fit_tracker', '{kcal} kcal', { kcal: activity.calories }) }}</span>
                             </div>
                         </div>
-                    </div>
+                    </router-link>
                 </div>
-                <div v-if="totalPages > 1" class="pagination">
-                    <button class="pagination__btn" :disabled="currentPage === 1" @click="currentPage--">&#8592;</button>
-                    <span class="pagination__info">{{ currentPage }} / {{ totalPages }}</span>
-                    <button class="pagination__btn" :disabled="currentPage === totalPages" @click="currentPage++">&#8594;</button>
-                </div>
+                <PageNav
+                    v-if="totalPages > 1"
+                    class="pagination"
+                    :previous-label="t('fit_tracker', 'Previous page')"
+                    :next-label="t('fit_tracker', 'Next page')"
+                    :has-previous="currentPage > 1"
+                    :has-next="currentPage < totalPages"
+                    @previous="currentPage--"
+                    @next="currentPage++"
+                >
+                    {{ t('fit_tracker', 'Page {page} of {total}', { page: currentPage, total: totalPages }) }}
+                </PageNav>
             </template>
         </template>
     </div>
@@ -87,22 +120,39 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { t } from '@nextcloud/l10n'
+import { NcButton, NcEmptyContent, NcIconSvgWrapper, NcNoteCard } from '@nextcloud/vue'
 import ActivityCalendar from './ActivityCalendar.vue'
 import ActivityWeekChart from './ActivityWeekChart.vue'
 import SleepStageBar from './SleepStageBar.vue'
-import { sportIcon as getSportIcon, sportLabel } from '../sports.js'
-import { setActivities, setSleep } from '../store/navData.js'
+import SportBadge from './SportBadge.vue'
+import LoadingSkeleton from './LoadingSkeleton.vue'
+import LoadError from './LoadError.vue'
+import PageNav from './PageNav.vue'
+import { sportIcon, sportColor, sportLabel } from '../sports.js'
+import { STAGE_COLORS } from '../sleepStages.js'
+import { navData, setActivities, setSleep, openSettings } from '../store/navData.js'
+import { icons } from '../icons.js'
+import { formatDistance, formatDurationShort, formatDay, formatTime } from '../format.js'
+
+const PAGE_SIZE = 9
 
 export default {
     name: 'ActivityList',
-    components: { ActivityCalendar, ActivityWeekChart, SleepStageBar },
+    components: {
+        ActivityCalendar, ActivityWeekChart, SleepStageBar, SportBadge, LoadingSkeleton, LoadError, PageNav,
+        NcButton, NcEmptyContent, NcIconSvgWrapper, NcNoteCard,
+    },
     data() {
         return {
+            navData,
+            icons,
+            sleepColor: STAGE_COLORS.rem,
             activities: [],
             syncErrors: [],
             lastSleep: null,
             loading: true,
-            error: null,
+            error: false,
             currentPage: 1,
             calendarSelectedDate: null,
         }
@@ -110,10 +160,7 @@ export default {
     computed: {
         pageTitle() {
             const sport = this.$route.query.sport
-            return sport ? sportLabel(sport) : 'All Activities'
-        },
-        monthTitle() {
-            return new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+            return sport ? sportLabel(sport) : t('fit_tracker', 'All activities')
         },
         filtered() {
             const sport = this.$route.query.sport
@@ -121,11 +168,24 @@ export default {
             return this.activities.filter(a => a.sport === sport)
         },
         totalPages() {
-            return Math.ceil(this.filtered.length / 9) || 1
+            return Math.ceil(this.filtered.length / PAGE_SIZE) || 1
         },
         paginated() {
-            const start = (this.currentPage - 1) * 9
-            return this.filtered.slice(start, start + 9)
+            const start = (this.currentPage - 1) * PAGE_SIZE
+            return this.filtered.slice(start, start + PAGE_SIZE)
+        },
+        emptyTitle() {
+            if (navData.folderPath === '') return t('fit_tracker', 'No folder selected yet')
+            const sport = this.$route.query.sport
+            if (sport) return t('fit_tracker', 'No activities of this type')
+            return t('fit_tracker', 'No activities yet')
+        },
+        emptyDescription() {
+            if (navData.folderPath === '') {
+                return t('fit_tracker', 'Choose the folder where your watch exports its .fit files.')
+            }
+            if (this.$route.query.sport) return ''
+            return t('fit_tracker', 'No activity files were found in {folder}. New files are imported on every sync.', { folder: navData.folderPath ?? '' })
         },
     },
     watch: {
@@ -143,7 +203,7 @@ export default {
     methods: {
         async load() {
             this.loading = true
-            this.error = null
+            this.error = false
             this.syncErrors = []
             try {
                 const [actRes, sleepRes] = await Promise.all([
@@ -157,35 +217,26 @@ export default {
                 setActivities(this.activities)
                 setSleep(sessions)
             } catch (e) {
-                this.error = 'Failed to load activities'
+                this.error = true
             } finally {
                 this.loading = false
             }
         },
-        sportIcon: getSportIcon,
-        formatDate(raw) {
-            if (!raw) return ''
-            return new Date(raw).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
-        },
+        openSettings,
+        sportIcon,
+        sportColor,
+        formatDistance,
+        formatDurationShort,
+        formatDay,
         formatTimeRange(startRaw, durationSeconds) {
             if (!startRaw) return ''
-            const start = new Date(startRaw)
-            const opts = { hour: '2-digit', minute: '2-digit' }
-            const from = start.toLocaleTimeString(undefined, opts)
+            const from = formatTime(startRaw)
             if (!durationSeconds) return from
-            const end = new Date(start.getTime() + durationSeconds * 1000)
-            return `${from} – ${end.toLocaleTimeString(undefined, opts)}`
+            const end = new Date(new Date(startRaw).getTime() + durationSeconds * 1000)
+            return `${from} – ${formatTime(end)}`
         },
-        formatDistance(km) {
-            if (km < 1) return Math.round(km * 1000) + ' m'
-            return km.toFixed(2) + ' km'
-        },
-        formatDuration(seconds) {
-            const h = Math.floor(seconds / 3600)
-            const m = Math.floor((seconds % 3600) / 60)
-            const s = seconds % 60
-            if (h > 0) return `${h}h ${m}m`
-            return `${m}m ${s}s`
+        hasStageDurations(s) {
+            return (s.timeDeep || 0) + (s.timeLight || 0) + (s.timeRem || 0) + (s.timeAwake || 0) > 0
         },
     },
 }
@@ -193,15 +244,29 @@ export default {
 
 <style scoped>
 .activity-list {
-    padding: 0 20px;
+    padding: 0 var(--ft-gap-5) var(--ft-gap-6);
     max-width: 1000px;
 }
+.page-title {
+    margin: 0 0 var(--ft-gap-5) var(--ft-gap-8);
+    padding-top: var(--ft-gap-2);
+    font-size: 20px;
+    font-weight: bold;
+}
+.sync-errors ul {
+    margin: var(--ft-gap-1) 0 0 var(--ft-gap-4);
+    padding: 0;
+    list-style: disc;
+}
 .dashboard {
-    margin-bottom: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ft-gap-4);
+    margin-bottom: var(--ft-gap-6);
 }
 .dashboard-row {
     display: flex;
-    gap: 20px;
+    gap: var(--ft-gap-5);
     flex-wrap: wrap;
 }
 .dashboard-panel {
@@ -209,125 +274,91 @@ export default {
     min-width: 280px;
     background: var(--color-main-background);
     border: 1px solid var(--color-border);
-    border-radius: 8px;
-    padding: 16px;
+    border-radius: var(--border-radius-container);
+    padding: var(--ft-gap-4);
 }
 .panel-title {
-    margin: 0 0 12px;
-    font-size: 14px;
-    font-weight: 600;
+    margin: 0 0 var(--ft-gap-2);
+    font-size: var(--default-font-size);
+    font-weight: bold;
     color: var(--color-text-maxcontrast);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
 }
 .list-title {
-    margin: 0 0 12px;
-    font-size: 16px;
-    font-weight: 600;
-}
-.page-title {
-    margin: 0 0 20px 30px;
+    margin: 0 0 var(--ft-gap-3);
     font-size: 20px;
-    font-weight: 600;
-    padding-top: 8px;
+    font-weight: bold;
 }
 .activity-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    gap: var(--ft-gap-4);
+}
+/* Cards and the sleep panel are links: reachable by keyboard, open on Enter */
+.activity-card,
+.sleep-panel {
+    color: var(--color-main-text);
+    text-decoration: none;
+    transition: background-color 0.15s, border-color 0.15s;
 }
 .activity-card {
     display: flex;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 8px;
+    gap: var(--ft-gap-3);
+    padding: var(--ft-gap-4);
+    border-radius: var(--border-radius-container);
     border: 1px solid var(--color-border);
-    cursor: pointer;
-    transition: box-shadow 0.15s;
     background: var(--color-main-background);
 }
-.activity-card:hover {
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+.activity-card:hover,
+.sleep-panel:hover {
+    background: var(--color-background-hover);
+    border-color: var(--color-border-maxcontrast);
 }
-.activity-card__icon {
-    font-size: 28px;
-    line-height: 1;
+.activity-card:focus-visible,
+.sleep-panel:focus-visible {
+    outline: 2px solid var(--color-primary-element);
+    outline-offset: 2px;
 }
+.activity-card__body { min-width: 0; }
 .activity-card__name {
-    font-weight: 600;
-    margin-bottom: 2px;
+    font-weight: bold;
+    margin-bottom: var(--ft-gap-1);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .activity-card__date {
-    font-size: 12px;
+    font-size: var(--font-size-small);
     color: var(--color-text-maxcontrast);
-    margin-bottom: 6px;
+    margin-bottom: var(--ft-gap-1);
 }
 .activity-card__stats {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    font-size: 13px;
+    gap: var(--ft-gap-1) var(--ft-gap-3);
+    font-size: var(--font-size-small);
 }
-.sync-errors {
-    margin-bottom: 16px;
-    padding: 12px 16px;
-    background: var(--color-background-dark);
-    border-left: 3px solid var(--color-text-error);
-    border-radius: 4px;
-    font-size: 13px;
-    color: var(--color-text-error);
-}
-.sync-errors ul { margin: 4px 0 0 16px; padding: 0; }
-.dashboard-row--sleep { margin-top: 16px; }
 .sleep-panel {
-    cursor: pointer;
-    transition: box-shadow 0.15s;
+    display: block;
     flex: none;
     width: 100%;
-    padding: 10px 16px;
 }
-.sleep-panel:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-.sleep-panel .panel-title { margin-bottom: 8px; }
 .sleep-summary {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--ft-gap-3);
 }
-.sleep-summary__icon { font-size: 24px; line-height: 1; }
 .sleep-summary__body { flex: 1; }
 .sleep-summary__top {
     display: flex;
     align-items: baseline;
-    gap: 12px;
-    margin-bottom: 2px;
+    gap: var(--ft-gap-3);
 }
-.sleep-summary__dur { font-size: 20px; font-weight: 600; }
-.sleep-summary__hrv { font-size: 15px; font-weight: 600; }
-.sleep-summary__meta { font-size: 13px; color: var(--color-text-maxcontrast); }
-.loading, .error, .empty {
-    padding: 40px;
-    text-align: center;
-    color: var(--color-text-maxcontrast);
-}
-.error { color: var(--color-text-error); }
+.sleep-summary__dur { font-size: 20px; font-weight: bold; }
+.sleep-summary__hrv { font-weight: bold; }
+.sleep-summary__meta { font-size: var(--font-size-small); color: var(--color-text-maxcontrast); }
+.sleep-summary__stagebar { margin-top: var(--ft-gap-2); }
 .pagination {
-    display: flex;
-    align-items: center;
     justify-content: center;
-    gap: 16px;
-    margin-top: 24px;
+    margin-top: var(--ft-gap-6);
 }
-.pagination__btn {
-    background: var(--color-main-background);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius);
-    padding: 6px 14px;
-    cursor: pointer;
-    font-size: 16px;
-    color: var(--color-main-text);
-    transition: background 0.15s;
-}
-.pagination__btn:hover:not(:disabled) { background: var(--color-background-dark); }
-.pagination__btn:disabled { opacity: 0.4; cursor: default; }
-.pagination__info { font-size: 14px; color: var(--color-text-maxcontrast); min-width: 60px; text-align: center; }
 </style>

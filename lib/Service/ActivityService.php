@@ -17,6 +17,7 @@ use OCP\Files\File;
 use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
+use OCP\Files\NotPermittedException;
 use OCP\IConfig;
 
 class ActivityService {
@@ -136,10 +137,7 @@ class ActivityService {
         foreach ($existingPaths as $dbPath) {
             if (!isset($currentSet[$dbPath])) {
                 try {
-                    $activity = $this->activityMapper->findByFitPath($userId, $dbPath);
-                    $this->trackpointMapper->deleteByActivity($activity->getId());
-                    $this->lapMapper->deleteByActivity($activity->getId());
-                    $this->activityMapper->deleteForUser($activity->getId(), $userId);
+                    $this->deleteActivityRows($this->activityMapper->findByFitPath($userId, $dbPath), $userId);
                     $stats['removed']++;
                 } catch (\Exception) {
                     // Already gone or not found — ignore
@@ -180,11 +178,102 @@ class ActivityService {
         }
     }
 
+    /**
+     * Delete an activity together with its .fit file. The file goes through
+     * the normal Nextcloud delete, so it lands in the trash bin; otherwise the
+     * next sync would simply import it again.
+     */
     public function deleteForUser(int $id, string $userId): void {
-        $this->activityMapper->findForUser($id, $userId);
-        $this->trackpointMapper->deleteByActivity($id);
-        $this->lapMapper->deleteByActivity($id);
-        $this->activityMapper->deleteForUser($id, $userId);
+        $activity = $this->activityMapper->findForUser($id, $userId);
+        $this->trashFitFile($userId, $activity->getFitFilePath());
+        $this->deleteActivityRows($activity, $userId);
+    }
+
+    /**
+     * Drop an activity's imported data and import its .fit file again with the
+     * current parser. The file may now be detected as sleep or nap, or not be
+     * importable at all.
+     *
+     * @return array{type: 'activity'|'sleep'|'none', id: ?int}
+     * @throws DoesNotExistException when the activity is not the user's
+     * @throws NotFoundException when the .fit file no longer exists
+     */
+    public function reimportForUser(int $id, string $userId): array {
+        $activity = $this->activityMapper->findForUser($id, $userId);
+        $relativePath = $activity->getFitFilePath();
+        $file = $this->getFitFile($userId, $relativePath);
+        $this->deleteActivityRows($activity, $userId);
+        return $this->importAnyType($userId, $file, $relativePath);
+    }
+
+    /**
+     * Import a .fit file as an activity, or as sleep when it is a sleep/nap
+     * file. Used by the per-item re-import of both activities and sleep.
+     *
+     * @return array{type: 'activity'|'sleep'|'none', id: ?int}
+     */
+    public function importAnyType(string $userId, File $file, string $relativePath): array {
+        if ($this->importFile($userId, $file, $relativePath)) {
+            return ['type' => 'activity', 'id' => $this->activityMapper->findByFitPath($userId, $relativePath)->getId()];
+        }
+        $sleepId = $this->sleepService->importFromFile($userId, $file, $relativePath)
+            ? $this->sleepService->findIdByFitPath($userId, $relativePath)
+            : null;
+        return $sleepId !== null
+            ? ['type' => 'sleep', 'id' => $sleepId]
+            : ['type' => 'none', 'id' => null];
+    }
+
+    /**
+     * Throw away everything imported for the user (activities and sleep) and
+     * import the whole folder again. The .fit files themselves are untouched.
+     *
+     * @return array{activities: int, sleep: int, errors: string[]}
+     */
+    public function reimportAll(string $userId): array {
+        foreach ($this->activityMapper->findAllForUser($userId) as $activity) {
+            $this->deleteActivityRows($activity, $userId);
+        }
+        $this->sleepService->deleteAllRowsForUser($userId);
+
+        $activityStats = $this->syncFolder($userId);
+        $sleepStats    = $this->sleepService->syncFolder($userId);
+        return [
+            'activities' => $activityStats['imported'],
+            'sleep'      => $sleepStats['imported'],
+            'errors'     => array_merge($activityStats['errors'], $sleepStats['errors']),
+        ];
+    }
+
+    /** @throws NotFoundException */
+    public function getFitFile(string $userId, string $relativePath): File {
+        $node = $this->rootFolder->getUserFolder($userId)->get($relativePath);
+        if (!($node instanceof File)) {
+            throw new NotFoundException('Not a file: ' . $relativePath);
+        }
+        return $node;
+    }
+
+    /**
+     * Move a .fit file to the trash bin. A file that is already gone is fine;
+     * a file the user may not delete (e.g. a read-only share) is an error.
+     */
+    public function trashFitFile(string $userId, string $relativePath): void {
+        try {
+            $file = $this->getFitFile($userId, $relativePath);
+        } catch (NotFoundException) {
+            return;
+        }
+        if (!$file->isDeletable()) {
+            throw new NotPermittedException('Not allowed to delete ' . $relativePath);
+        }
+        $file->delete();
+    }
+
+    private function deleteActivityRows(Activity $activity, string $userId): void {
+        $this->trackpointMapper->deleteByActivity($activity->getId());
+        $this->lapMapper->deleteByActivity($activity->getId());
+        $this->activityMapper->deleteForUser($activity->getId(), $userId);
     }
 
     /**
@@ -223,9 +312,7 @@ class ActivityService {
                     // Mis-imported as an activity before sleep/nap detection covered
                     // this file — move it: drop the activity row, re-import as sleep.
                     $relativePath = $activity->getFitFilePath();
-                    $this->trackpointMapper->deleteByActivity($activity->getId());
-                    $this->lapMapper->deleteByActivity($activity->getId());
-                    $this->activityMapper->deleteForUser($activity->getId(), $userId);
+                    $this->deleteActivityRows($activity, $userId);
                     if ($this->sleepService->importFromFile($userId, $file, $relativePath)) {
                         $stats['movedToSleep']++;
                     } else {

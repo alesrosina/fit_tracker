@@ -15,12 +15,15 @@ return [
         ['name' => 'activity#laps',        'url' => '/api/activities/{id}/laps',        'verb' => 'GET'],
         ['name' => 'activity#photos', 'url' => '/api/activities/{id}/photos', 'verb' => 'GET'],
         ['name' => 'activity#repair_sport', 'url' => '/api/activities/repair-sport', 'verb' => 'POST'],
+        ['name' => 'activity#reimport',     'url' => '/api/activities/{id}/reimport', 'verb' => 'POST'],
+        ['name' => 'activity#reimport_all', 'url' => '/api/reimport', 'verb' => 'POST'],
 
         // Sleep API
         ['name' => 'sleep#index',   'url' => '/api/sleep',             'verb' => 'GET'],
         ['name' => 'sleep#show',    'url' => '/api/sleep/{id}',        'verb' => 'GET'],
         ['name' => 'sleep#stages',  'url' => '/api/sleep/{id}/stages', 'verb' => 'GET'],
         ['name' => 'sleep#destroy', 'url' => '/api/sleep/{id}',        'verb' => 'DELETE'],
+        ['name' => 'sleep#reimport', 'url' => '/api/sleep/{id}/reimport', 'verb' => 'POST'],
 
         // Config
         ['name' => 'config#get_config', 'url' => '/api/config', 'verb' => 'GET'],

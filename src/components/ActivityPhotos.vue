@@ -1,12 +1,14 @@
 <template>
     <div class="activity-photos">
-        <h3>Photos</h3>
+        <h3>{{ t('fit_tracker', 'Photos') }}</h3>
         <div class="photo-grid">
-            <div
+            <button
                 v-for="(photo, i) in photos"
                 :key="photo.fileId"
+                type="button"
                 class="photo-thumb"
                 :class="{ 'photo-thumb--wide': orientationMap[photo.fileId] === 'landscape' }"
+                :aria-label="t('fit_tracker', 'Open {name}', { name: photo.name ?? '' })"
                 @click="$emit('open-photo', i)"
             >
                 <img
@@ -15,7 +17,7 @@
                     loading="lazy"
                     @load="onImgLoad($event, photo)"
                 />
-            </div>
+            </button>
         </div>
     </div>
 </template>
@@ -54,13 +56,25 @@ export default {
     grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
     grid-auto-rows: 110px;
     grid-auto-flow: dense;
-    gap: 4px;
+    gap: var(--ft-gap-1);
+}
+.activity-photos {
+    margin-bottom: var(--ft-gap-6);
 }
 .photo-thumb {
     position: relative;
     display: block;
     overflow: hidden;
     cursor: pointer;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--border-radius-small);
+    background: var(--color-background-dark);
+}
+.photo-thumb:focus-visible {
+    outline: 2px solid var(--color-primary-element);
+    outline-offset: 2px;
 }
 .photo-thumb--wide {
     grid-column: span 2;

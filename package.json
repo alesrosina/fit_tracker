@@ -1,6 +1,6 @@
 {
     "name": "fit_tracker",
-    "version": "1.1.10",
+    "version": "1.2.0",
     "private": true,
     "scripts": {
         "build": "webpack --config webpack.js --node-env production",
@@ -8,8 +8,10 @@
         "watch": "webpack --config webpack.js --node-env development --watch"
     },
     "dependencies": {
+        "@material-symbols/svg-400": "^0.48.0",
         "@nextcloud/axios": "^2.6.0",
         "@nextcloud/dialogs": "^7.4.1",
+        "@nextcloud/l10n": "^3.4.1",
         "@nextcloud/router": "^3.1.0",
         "@nextcloud/vue": "^9.9.0",
         "chart.js": "^4.5.1",

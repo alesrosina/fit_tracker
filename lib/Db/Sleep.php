@@ -108,6 +108,7 @@ class Sleep extends Entity {
             'timeRem'    => $this->timeRem,
             'timeAwake'  => $this->timeAwake,
             'createdAt'  => $this->createdAt,
+            'fitFilePath' => $this->fitFilePath,
         ];
     }
 }

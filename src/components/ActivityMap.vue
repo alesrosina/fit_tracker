@@ -1,6 +1,6 @@
 <template>
     <div class="activity-map-section">
-        <h3>Route</h3>
+        <h3>{{ t('fit_tracker', 'Route') }}</h3>
         <div ref="mapEl" class="map-container"></div>
     </div>
 </template>
@@ -9,6 +9,16 @@
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { generateUrl } from '@nextcloud/router'
+import { t } from '@nextcloud/l10n'
+import { icons } from '../icons.js'
+import { formatTime } from '../format.js'
+
+// Icon markup for Leaflet's divIcon (rendered outside Vue)
+const cameraSvg = icons.photo_camera
+    .replace(/width="\d+"/, 'width="18"')
+    .replace(/height="\d+"/, 'height="18"')
+    .replace('<svg ', '<svg fill="currentColor" aria-hidden="true" ')
+const escapeHtml = str => String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
 export default {
     name: 'ActivityMap',
@@ -61,12 +71,12 @@ export default {
             // Start marker
             L.circleMarker(coords[0], {
                 radius: 8, color: '#22c55e', fillColor: '#22c55e', fillOpacity: 1,
-            }).bindTooltip('Start').addTo(this.map)
+            }).bindTooltip(t('fit_tracker', 'Start')).addTo(this.map)
 
             // End marker
             L.circleMarker(coords[coords.length - 1], {
                 radius: 8, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1,
-            }).bindTooltip('Finish').addTo(this.map)
+            }).bindTooltip(t('fit_tracker', 'Finish')).addTo(this.map)
 
             if (this.photos.length > 0) {
                 this.addPhotoMarkers(this.photos)
@@ -98,8 +108,8 @@ export default {
                 const count = cluster.length
                 const icon = L.divIcon({
                     html: count > 1
-                        ? `<div class="photo-pin photo-pin--multi">📷<span class="photo-pin__count">${count}</span></div>`
-                        : `<div class="photo-pin">📷</div>`,
+                        ? `<div class="photo-pin photo-pin--multi">${cameraSvg}<span class="photo-pin__count">${count}</span></div>`
+                        : `<div class="photo-pin">${cameraSvg}</div>`,
                     className: '',
                     iconSize: [32, 32],
                     iconAnchor: [16, 16],
@@ -110,9 +120,7 @@ export default {
                     fileId: photo.fileId,
                     name: photo.name || '',
                     thumbUrl: generateUrl(`/core/preview?fileId=${photo.fileId}&x=160&y=160&a=1`),
-                    time: photo.takenAt
-                        ? new Date(photo.takenAt.replace(' ', 'T')).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
-                        : '',
+                    time: photo.takenAt ? formatTime(photo.takenAt) : '',
                 }))
 
                 const first   = photoData[0]
@@ -121,10 +129,10 @@ export default {
                 const popupHtml = `
                     <div class="photo-popup">
                         <div class="photo-carousel">
-                            <img class="photo-carousel__img" src="${first.thumbUrl}" width="160" height="160">
+                            <img class="photo-carousel__img" src="${first.thumbUrl}" width="160" height="160" alt="${escapeHtml(first.name)}" title="${escapeHtml(t('fit_tracker', 'Open photo'))}" tabindex="0" role="button">
                             ${multi ? `
-                            <button class="button-vue photo-carousel__btn photo-carousel__btn--prev" style="display:none">&#8249;</button>
-                            <button class="button-vue photo-carousel__btn photo-carousel__btn--next">&#8250;</button>
+                            <button class="photo-carousel__btn photo-carousel__btn--prev" style="display:none" aria-label="${escapeHtml(t('fit_tracker', 'Previous photo'))}">${icons.chevron_left}</button>
+                            <button class="photo-carousel__btn photo-carousel__btn--next" aria-label="${escapeHtml(t('fit_tracker', 'Next photo'))}">${icons.chevron_right}</button>
                             ` : ''}
                         </div>
                         <div class="photo-carousel__footer">
@@ -149,16 +157,21 @@ export default {
                     const refresh = () => {
                         const p = photoData[idx]
                         img.src = p.thumbUrl
+                        img.alt = p.name
                         if (timeEl)    timeEl.textContent    = p.time
                         if (counterEl) counterEl.textContent = `${idx + 1} / ${photoData.length}`
                         if (prevBtn)   prevBtn.style.display = idx === 0 ? 'none' : 'flex'
                         if (nextBtn)   nextBtn.style.display = idx === photoData.length - 1 ? 'none' : 'flex'
                     }
 
-                    img.addEventListener('click', () => {
+                    const openPhoto = () => {
                         document.dispatchEvent(new CustomEvent('fit-photo-open', {
                             detail: { fileId: photoData[idx].fileId, name: photoData[idx].name },
                         }))
+                    }
+                    img.addEventListener('click', openPhoto)
+                    img.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPhoto() }
                     })
 
                     if (prevBtn) {
@@ -206,46 +219,58 @@ export default {
 </script>
 
 <style scoped>
+.activity-map-section {
+    margin-bottom: var(--ft-gap-6);
+}
 .map-container {
     height: 400px;
     width: 100%;
-    border-radius: 8px;
+    border-radius: var(--border-radius-container);
     overflow: hidden;
     border: 1px solid var(--color-border);
 }
 </style>
 
-<!-- Non-scoped: Leaflet injects popup/marker HTML outside the Vue component shadow -->
+<!-- Non-scoped: Leaflet injects popup/marker HTML outside the Vue component -->
 <style>
+.activity-map-section .leaflet-popup-content-wrapper,
+.activity-map-section .leaflet-popup-tip {
+    background: var(--color-main-background);
+    color: var(--color-main-text);
+}
 .photo-pin {
-    font-size: 22px;
-    line-height: 32px;
-    text-align: center;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius-pill);
+    background: var(--color-primary-element);
+    color: var(--color-primary-element-text);
+    border: 2px solid var(--color-main-background);
+    box-shadow: 0 0 4px var(--color-box-shadow);
     cursor: pointer;
     user-select: none;
     position: relative;
-}
-.photo-pin--multi {
-    display: inline-block;
+    box-sizing: border-box;
 }
 .photo-pin__count {
     position: absolute;
-    top: -4px;
-    right: -6px;
-    background: #0082c9;
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    border-radius: 8px;
-    padding: 0 4px;
-    line-height: 14px;
-    min-width: 14px;
+    top: -6px;
+    right: -8px;
+    background: var(--color-main-background);
+    color: var(--color-main-text);
+    border: 1px solid var(--color-border-maxcontrast);
+    font-size: var(--font-size-small);
+    font-weight: bold;
+    border-radius: var(--border-radius-pill);
+    padding: 0 var(--ft-gap-1);
+    line-height: 16px;
+    min-width: 16px;
     text-align: center;
 }
 .photo-popup {
-    font-size: 12px;
-    padding: 2px;
+    font-size: var(--font-size-small);
     width: 160px;
 }
 .photo-carousel {
@@ -257,37 +282,48 @@ export default {
     width: 160px;
     height: 160px;
     object-fit: cover;
-    border-radius: 4px;
+    border-radius: var(--border-radius-small);
     display: block;
     cursor: pointer;
 }
+.photo-carousel__img:focus-visible {
+    outline: 2px solid var(--color-primary-element);
+    outline-offset: 2px;
+}
+/* Overlaid on the photo, so a fixed dark scrim keeps the icon legible */
 .photo-carousel__btn {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
-    background-color: rgba(0, 0, 0, 0.45);
-    border-radius: 50%;
-    color: #fff;
+    width: var(--default-clickable-area);
+    height: var(--default-clickable-area);
+    min-height: 0;
+    margin: 0;
+    padding: 0;
     border: none;
-    width: 26px;
-    height: 26px;
-    font-size: 20px;
+    border-radius: var(--border-radius-pill);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    fill: currentColor;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0;
-    line-height: 1;
 }
-.photo-carousel__btn:hover { background: rgba(0, 0, 0, 0.65); }
-.photo-carousel__btn--prev { left: 4px; }
-.photo-carousel__btn--next { right: 4px; }
+.photo-carousel__btn svg {
+    width: 20px;
+    height: 20px;
+}
+.photo-carousel__btn:hover,
+.photo-carousel__btn:focus-visible { background-color: rgba(0, 0, 0, 0.7); }
+.photo-carousel__btn--prev { left: var(--ft-gap-1); }
+.photo-carousel__btn--next { right: var(--ft-gap-1); }
 .photo-carousel__footer {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 4px;
-    color: #666;
+    margin-top: var(--ft-gap-1);
+    color: var(--color-text-maxcontrast);
 }
-.photo-carousel__counter { font-weight: 600; }
+.photo-carousel__counter { font-weight: bold; }
 </style>

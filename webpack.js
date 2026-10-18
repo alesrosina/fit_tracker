@@ -20,7 +20,16 @@ webpackConfig.module.rules = webpackConfig.module.rules.map(rule => {
     if (rule.test && rule.test.toString() === '/\\.scss$/') {
         return { test: /\.scss$/, use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'] }
     }
+    // `?raw` SVG imports (Material Symbols) are handled by the rule below
+    if (rule.test && rule.test.toString().includes('svg')) {
+        return { ...rule, resourceQuery: { not: [/raw/] } }
+    }
     return rule
+})
+
+webpackConfig.module.rules.push({
+    resourceQuery: /raw/,
+    type: 'asset/source',
 })
 
 webpackConfig.plugins = [

@@ -1,70 +1,55 @@
 <template>
     <div class="activity-detail">
-        <div class="activity-detail__back">
-            <button class="back-btn" @click="$router.push('/')">← Back</button>
-            <div v-if="activity" class="activity-detail__actions">
-                <button class="share-btn" @click="showShare = true">Share</button>
-                <button class="delete-btn" @click="deleteActivity">Delete</button>
-            </div>
-        </div>
+        <DetailToolbar
+            :back-to="'/'"
+            :back-label="t('fit_tracker', 'All activities')"
+            :show-actions="!!activity"
+            :delete-label="t('fit_tracker', 'Delete activity')"
+            :delete-title="t('fit_tracker', 'Delete activity and move its file to the trash?')"
+            :delete-message="deleteMessage"
+            :busy-label="busyLabel"
+            @delete="deleteActivity"
+            @reimport="reimport"
+        >
+            <NcButton variant="primary" @click="showShare = true">
+                <template #icon>
+                    <NcIconSvgWrapper :svg="icons.share" :size="20" />
+                </template>
+                {{ t('fit_tracker', 'Share') }}
+            </NcButton>
+        </DetailToolbar>
 
-        <div v-if="loading" class="loading"></div>
-        <div v-else-if="error" class="error">{{ error }}</div>
+        <LoadingSkeleton v-if="loading" variant="detail" />
+        <NcEmptyContent
+            v-else-if="notFound"
+            :name="t('fit_tracker', 'Activity not found')"
+            :description="t('fit_tracker', 'It may have been deleted.')"
+        >
+            <template #icon>
+                <NcIconSvgWrapper :svg="icons.exercise" />
+            </template>
+        </NcEmptyContent>
+        <LoadError
+            v-else-if="error"
+            :heading="t('fit_tracker', 'Could not load activity')"
+            :message="t('fit_tracker', 'Check your connection and try again.')"
+            @retry="load"
+        />
 
         <template v-else-if="activity">
             <div class="activity-detail__header">
-                <span class="sport-icon">{{ sportIcon }}</span>
+                <SportBadge :icon="sportIcon" :color="sportColor" :size="32" />
                 <div>
                     <h2>{{ activity.name }}</h2>
-                    <div class="subtitle">{{ formatDate(activity.startTime) }}</div>
+                    <div class="subtitle">{{ formatDateTime(activity.startTime) }}</div>
                 </div>
             </div>
 
             <!-- Key stats -->
             <div class="stats-grid">
-                <div v-if="effectiveAvgSpeed && showsSpeedStat" class="stat">
-                    <div class="stat__label">Avg Speed</div>
-                    <div class="stat__value">{{ effectiveAvgSpeed.toFixed(1) }} km/h</div>
-                </div>
-                <div v-if="effectiveMaxSpeed && showsSpeedStat" class="stat">
-                    <div class="stat__label">Max Speed</div>
-                    <div class="stat__value">{{ effectiveMaxSpeed.toFixed(1) }} km/h</div>
-                </div>
-                <div v-if="activity.distance" class="stat">
-                    <div class="stat__label">Distance</div>
-                    <div class="stat__value">{{ formatDistance(activity.distance) }}</div>
-                </div>
-                <div v-if="activity.duration" class="stat">
-                    <div class="stat__label">Duration</div>
-                    <div class="stat__value">{{ formatDuration(activity.duration) }}</div>
-                </div>
-                <div v-if="pace" class="stat">
-                    <div class="stat__label">Avg Pace</div>
-                    <div class="stat__value">{{ pace }}</div>
-                </div>
-                <div v-if="activity.avgHr" class="stat">
-                    <div class="stat__label">Avg HR</div>
-                    <div class="stat__value">{{ activity.avgHr }} bpm</div>
-                </div>
-                <div v-if="activity.maxHr" class="stat">
-                    <div class="stat__label">Max HR</div>
-                    <div class="stat__value">{{ activity.maxHr }} bpm</div>
-                </div>
-                <div v-if="activity.calories" class="stat">
-                    <div class="stat__label">Calories</div>
-                    <div class="stat__value">{{ activity.calories }} kcal</div>
-                </div>
-                <div v-if="activity.elevationGain" class="stat">
-                    <div class="stat__label">Elevation</div>
-                    <div class="stat__value">+{{ Math.round(activity.elevationGain) }} m</div>
-                </div>
-                <div v-if="activity.avgCadence" class="stat">
-                    <div class="stat__label">Avg Cadence</div>
-                    <div class="stat__value">{{ activity.avgCadence }} rpm</div>
-                </div>
-                <div v-if="activity.avgPower" class="stat">
-                    <div class="stat__label">Avg Power</div>
-                    <div class="stat__value">{{ activity.avgPower }} W</div>
+                <div v-for="stat in stats" :key="stat.label" class="stat">
+                    <div class="stat__label">{{ stat.label }}</div>
+                    <div class="stat__value">{{ stat.value }}</div>
                 </div>
             </div>
 
@@ -89,31 +74,27 @@
             />
 
             <!-- Laps table -->
-            <div v-if="laps.length > 0">
-                <h3>Laps</h3>
+            <section v-if="laps.length > 0">
+                <h3>{{ t('fit_tracker', 'Laps') }}</h3>
                 <table class="laps-table">
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Distance</th>
-                            <th>Duration</th>
-                            <th>Pace / Speed</th>
-                            <th>Avg HR</th>
-                            <th>Elevation</th>
+                            <th v-for="col in lapColumns" :key="col">{{ col }}</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="lap in laps" :key="lap.id">
                             <td data-label="#">{{ lap.lapNumber }}</td>
-                            <td data-label="Distance">{{ lap.distance ? formatDistance(lap.distance) : '–' }}</td>
-                            <td data-label="Duration">{{ lap.duration ? formatDuration(lap.duration) : '–' }}</td>
-                            <td data-label="Pace / Speed">{{ lapPaceOrSpeed(lap) }}</td>
-                            <td data-label="Avg HR">{{ lap.avgHr ? lap.avgHr + ' bpm' : '–' }}</td>
-                            <td data-label="Elevation">{{ lap.elevationGain ? '+' + Math.round(lap.elevationGain) + ' m' : '–' }}</td>
+                            <td :data-label="lapColumns[0]">{{ lap.distance ? formatDistance(lap.distance) : '–' }}</td>
+                            <td :data-label="lapColumns[1]">{{ lap.duration ? formatDurationClock(lap.duration) : '–' }}</td>
+                            <td :data-label="lapColumns[2]">{{ lapPaceOrSpeed(lap) }}</td>
+                            <td :data-label="lapColumns[3]">{{ lap.avgHr ? t('fit_tracker', '{bpm} bpm', { bpm: lap.avgHr }) : '–' }}</td>
+                            <td :data-label="lapColumns[4]">{{ lap.elevationGain ? t('fit_tracker', '+{meters} m', { meters: Math.round(lap.elevationGain) }) : '–' }}</td>
                         </tr>
                     </tbody>
                 </table>
-            </div>
+            </section>
         </template>
 
         <!-- Fullscreen photo gallery -->
@@ -137,11 +118,22 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { defineAsyncComponent } from 'vue'
-import { sportIcon as getSportIcon, SPEED_NOT_PACE_SPORTS } from '../sports.js'
+import { t } from '@nextcloud/l10n'
+import { NcButton, NcEmptyContent, NcIconSvgWrapper } from '@nextcloud/vue'
+import DetailToolbar from './DetailToolbar.vue'
+import LoadingSkeleton from './LoadingSkeleton.vue'
+import LoadError from './LoadError.vue'
+import SportBadge from './SportBadge.vue'
+import { sportIcon as getSportIcon, sportColor as getSportColor, SPEED_NOT_PACE_SPORTS } from '../sports.js'
+import { icons } from '../icons.js'
+import { formatDistance, formatDurationClock, formatDateTime, formatPace, formatSpeed } from '../format.js'
+import { deleteItem, reimportItem, fileName } from '../fileActions.js'
 
 export default {
     name: 'ActivityDetail',
     components: {
+        DetailToolbar, LoadingSkeleton, LoadError, SportBadge,
+        NcButton, NcEmptyContent, NcIconSvgWrapper,
         ActivityMap:    defineAsyncComponent(() => import('./ActivityMap.vue')),
         ActivityCharts: defineAsyncComponent(() => import('./ActivityCharts.vue')),
         ActivityPhotos: defineAsyncComponent(() => import('./ActivityPhotos.vue')),
@@ -151,17 +143,25 @@ export default {
     props: { id: { type: String, required: true } },
     data() {
         return {
+            icons,
             activity: null,
             laps: [],
             trackpoints: [],
             photos: [],
             loading: true,
-            error: null,
+            error: false,
+            notFound: false,
+            busy: null, // 'reimport' | 'delete' while running
             lightboxIndex: null,
             showShare: false,
         }
     },
     computed: {
+        busyLabel() {
+            if (this.busy === 'reimport') return t('fit_tracker', 'Re-importing…')
+            if (this.busy === 'delete') return t('fit_tracker', 'Deleting…')
+            return ''
+        },
         sortedPhotos() {
             return [...this.photos].sort((a, b) => {
                 if (!a.takenAt) return 1
@@ -171,6 +171,44 @@ export default {
         },
         sportIcon() {
             return getSportIcon(this.activity?.sport)
+        },
+        sportColor() {
+            return getSportColor(this.activity?.sport)
+        },
+        deleteMessage() {
+            // TRANSLATORS: {file} is the name of the .fit file, e.g. "2026-03-01-08-15-22.fit"
+            return t('fit_tracker', 'The activity will be removed from FIT Tracker and its file {file} will be moved to the Nextcloud trash. If you restore the file from the trash, the activity is imported again on the next sync.', {
+                file: fileName(this.activity?.fitFilePath),
+            })
+        },
+        stats() {
+            const a = this.activity
+            if (!a) return []
+            const list = []
+            // value() runs only when the stat is shown: t() throws on a null
+            // placeholder, and most activities lack some fields (e.g. power)
+            const add = (cond, label, value) => { if (cond) list.push({ label, value: value() }) }
+            add(this.effectiveAvgSpeed && this.showsSpeedStat, t('fit_tracker', 'Average speed'), () => formatSpeed(this.effectiveAvgSpeed))
+            add(this.effectiveMaxSpeed && this.showsSpeedStat, t('fit_tracker', 'Maximum speed'), () => formatSpeed(this.effectiveMaxSpeed))
+            add(a.distance, t('fit_tracker', 'Distance'), () => formatDistance(a.distance))
+            add(a.duration, t('fit_tracker', 'Duration'), () => formatDurationClock(a.duration))
+            add(this.pace, t('fit_tracker', 'Average pace'), () => this.pace)
+            add(a.avgHr, t('fit_tracker', 'Average heart rate'), () => t('fit_tracker', '{bpm} bpm', { bpm: a.avgHr }))
+            add(a.maxHr, t('fit_tracker', 'Maximum heart rate'), () => t('fit_tracker', '{bpm} bpm', { bpm: a.maxHr }))
+            add(a.calories, t('fit_tracker', 'Calories'), () => t('fit_tracker', '{kcal} kcal', { kcal: a.calories }))
+            add(a.elevationGain, t('fit_tracker', 'Elevation gain'), () => t('fit_tracker', '+{meters} m', { meters: Math.round(a.elevationGain) }))
+            add(a.avgCadence, t('fit_tracker', 'Average cadence'), () => t('fit_tracker', '{rpm} rpm', { rpm: a.avgCadence }))
+            add(a.avgPower, t('fit_tracker', 'Average power'), () => t('fit_tracker', '{watts} W', { watts: a.avgPower }))
+            return list
+        },
+        lapColumns() {
+            return [
+                t('fit_tracker', 'Distance'),
+                t('fit_tracker', 'Duration'),
+                SPEED_NOT_PACE_SPORTS.includes(this.activity?.sport) ? t('fit_tracker', 'Speed') : t('fit_tracker', 'Pace'),
+                t('fit_tracker', 'Average heart rate'),
+                t('fit_tracker', 'Elevation gain'),
+            ]
         },
         hasGps() {
             return this.trackpoints.some(tp => tp.lat !== null && tp.lon !== null)
@@ -198,11 +236,14 @@ export default {
             const a = this.activity
             if (!a || !this.effectiveAvgSpeed) return null
             if (SPEED_NOT_PACE_SPORTS.includes(a.sport) || ['gym', 'swimming', 'breathwork', 'meditation'].includes(a.sport)) return null
-            // speed is km/h → pace = 60 / speed (min/km)
-            const minPerKm = 60 / this.effectiveAvgSpeed
-            const m = Math.floor(minPerKm)
-            const s = Math.round((minPerKm - m) * 60)
-            return `${m}:${String(s).padStart(2, '0')} /km`
+            return formatPace(this.effectiveAvgSpeed)
+        },
+    },
+    watch: {
+        // Re-import can land on a new id for the same page component
+        id() {
+            this.photos = []
+            this.load()
         },
     },
     async mounted() {
@@ -216,7 +257,8 @@ export default {
     methods: {
         async load() {
             this.loading = true
-            this.error = null
+            this.error = false
+            this.notFound = false
             try {
                 const [actRes, lapRes, tpRes] = await Promise.all([
                     axios.get(generateUrl(`/apps/fit_tracker/api/activities/${this.id}`)),
@@ -231,7 +273,8 @@ export default {
                     this.loadPhotos()
                 }
             } catch (e) {
-                this.error = e.response?.status === 404 ? 'Activity not found' : 'Failed to load activity'
+                if (e.response?.status === 404) this.notFound = true
+                else this.error = true
             } finally {
                 this.loading = false
             }
@@ -252,26 +295,22 @@ export default {
             }
         },
         async deleteActivity() {
-            if (!confirm('Delete this activity? This cannot be undone.')) return
-            await axios.delete(generateUrl(`/apps/fit_tracker/api/activities/${this.id}`))
-            this.$router.push('/')
-            window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
+            this.busy = 'delete'
+            const deleted = await deleteItem('activities', this.id, this.activity?.fitFilePath)
+            this.busy = null
+            if (deleted) this.$router.push('/')
         },
-        formatDate(raw) {
-            if (!raw) return ''
-            return new Date(raw).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+        async reimport() {
+            // The content is about to be replaced: show the skeleton meanwhile
+            this.busy = 'reimport'
+            this.loading = true
+            const ok = await reimportItem('activities', this.id, this.$router)
+            this.busy = null
+            if (!ok) this.loading = false
         },
-        formatDistance(km) {
-            if (km < 1) return Math.round(km * 1000) + ' m'
-            return km.toFixed(2) + ' km'
-        },
-        formatDuration(s) {
-            const h = Math.floor(s / 3600)
-            const m = Math.floor((s % 3600) / 60)
-            const sec = s % 60
-            if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-            return `${m}:${String(sec).padStart(2,'0')}`
-        },
+        formatDateTime,
+        formatDistance,
+        formatDurationClock,
         lapPaceOrSpeed(lap) {
             let speed = lap.avgSpeed || null  // km/h
             // Fallback: derive from distance(km) / duration(s) * 3600 = km/h
@@ -279,14 +318,8 @@ export default {
                 speed = lap.distance / lap.duration * 3600
             }
             if (!speed) return '–'
-            if (SPEED_NOT_PACE_SPORTS.includes(this.activity?.sport)) {
-                return speed.toFixed(1) + ' km/h'
-            }
-            // pace = 60 / speed (min/km)
-            const minPerKm = 60 / speed
-            const m = Math.floor(minPerKm)
-            const s = Math.round((minPerKm - m) * 60)
-            return `${m}:${String(s).padStart(2, '0')} /km`
+            if (SPEED_NOT_PACE_SPORTS.includes(this.activity?.sport)) return formatSpeed(speed)
+            return formatPace(speed)
         },
     },
 }
@@ -294,92 +327,57 @@ export default {
 
 <style scoped>
 .activity-detail {
-    padding: 20px;
-    padding-top: 52px;
+    padding: 0 var(--ft-gap-5) var(--ft-gap-6);
     max-width: 960px;
-}
-.activity-detail__back {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 16px;
-}
-.back-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    font-size: 14px;
-    color: var(--color-primary-element);
-}
-.activity-detail__actions {
-    display: flex;
-    gap: 8px;
-}
-.share-btn {
-    background: var(--color-primary-element);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    font-size: 14px;
-    color: #fff;
-    padding: 6px 14px;
-}
-.share-btn:hover {
-    background: var(--color-primary-element-hover);
-}
-.delete-btn {
-    background: var(--color-element-error);
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    font-size: 14px;
-    color: #fff;
-    padding: 6px 14px;
-}
-.delete-btn:hover {
-    background: var(--color-error-hover);
 }
 .activity-detail__header {
     display: flex;
     align-items: center;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: var(--ft-gap-4);
+    margin-bottom: var(--ft-gap-6);
 }
-.sport-icon { font-size: 40px; }
-.activity-detail__header h2 { margin: 0 0 4px; }
-.subtitle { color: var(--color-text-maxcontrast); font-size: 14px; }
+.activity-detail__header h2 {
+    margin: 0 0 var(--ft-gap-1);
+    font-size: 24px;
+    font-weight: bold;
+}
+.subtitle { color: var(--color-text-maxcontrast); }
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
-    margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--ft-gap-3);
+    margin: 0 0 var(--ft-gap-6);
 }
 .stat {
     background: var(--color-background-dark);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: var(--border-radius-element);
+    padding: var(--ft-gap-3);
     text-align: center;
 }
 .stat__label {
-    font-size: 11px;
-    text-transform: uppercase;
+    font-size: var(--font-size-small);
     color: var(--color-text-maxcontrast);
-    margin-bottom: 4px;
+    margin-bottom: var(--ft-gap-1);
 }
 .stat__value {
+    margin: 0;
     font-size: 20px;
-    font-weight: 600;
+    font-weight: bold;
 }
 .laps-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
 }
 .laps-table th, .laps-table td {
-    padding: 8px 12px;
-    text-align: left;
+    padding: var(--ft-gap-2) var(--ft-gap-3);
+    text-align: start;
     border-bottom: 1px solid var(--color-border);
 }
-.laps-table th { font-weight: 600; color: var(--color-text-maxcontrast); }
+.laps-table th {
+    font-size: var(--font-size-small);
+    font-weight: bold;
+    color: var(--color-text-maxcontrast);
+}
 @media (max-width: 600px) {
     .laps-table thead { display: none; }
     .laps-table, .laps-table tbody, .laps-table tr, .laps-table td {
@@ -388,23 +386,21 @@ export default {
     }
     .laps-table tr {
         border: 1px solid var(--color-border);
-        border-radius: 8px;
-        margin-bottom: 8px;
-        padding: 4px 12px;
+        border-radius: var(--border-radius-element);
+        margin-bottom: var(--ft-gap-2);
+        padding: var(--ft-gap-1) var(--ft-gap-3);
     }
     .laps-table td {
         display: flex;
         justify-content: space-between;
-        padding: 6px 0;
+        padding: var(--ft-gap-1) 0;
         border-bottom: none;
     }
     .laps-table td::before {
         content: attr(data-label);
-        font-weight: 600;
+        font-weight: bold;
         color: var(--color-text-maxcontrast);
-        margin-right: 12px;
+        margin-inline-end: var(--ft-gap-3);
     }
 }
-.loading, .error { padding: 40px; text-align: center; }
-.error { color: var(--color-error); }
 </style>
