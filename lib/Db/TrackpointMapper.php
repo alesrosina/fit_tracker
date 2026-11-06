@@ -24,6 +24,22 @@ class TrackpointMapper extends QBMapper {
         return $this->findEntities($qb);
     }
 
+    /** @return array{0: float, 1: float}|null first recorded [lat, lon] */
+    public function findFirstPosition(int $activityId): ?array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('lat', 'lon')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('activity_id', $qb->createNamedParameter($activityId, IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->isNotNull('lat'))
+            ->andWhere($qb->expr()->isNotNull('lon'))
+            ->orderBy('timestamp', 'ASC')
+            ->setMaxResults(1);
+        $result = $qb->executeQuery();
+        $row = $result->fetch();
+        $result->closeCursor();
+        return $row ? [(float) $row['lat'], (float) $row['lon']] : null;
+    }
+
     public function deleteByActivity(int $activityId): void {
         $qb = $this->db->getQueryBuilder();
         $qb->delete($this->getTableName())

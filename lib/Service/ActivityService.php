@@ -9,6 +9,8 @@ use OCA\FitTracker\Db\Activity;
 use OCA\FitTracker\Db\ActivityMapper;
 use OCA\FitTracker\Db\Lap;
 use OCA\FitTracker\Db\LapMapper;
+use OCA\FitTracker\Db\Meta;
+use OCA\FitTracker\Db\MetaMapper;
 use OCA\FitTracker\Db\TrackpointMapper;
 use OCA\FitTracker\Service\SleepParserService;
 use OCA\FitTracker\Service\SleepService;
@@ -31,18 +33,174 @@ class ActivityService {
         private SleepService      $sleepService,
         private IRootFolder       $rootFolder,
         private IConfig           $config,
+        private MetaMapper        $metaMapper,
+        private GearService       $gearService,
+        private AnalysisService   $analysisService,
+        private CalendarService   $calendarService,
+        private ShareService      $shareService,
+        private WeatherService    $weatherService,
+        private SettingsService   $settings,
     ) {}
 
     /** @return array[] */
     public function listForUser(string $userId): array {
+        $metaByFile = $this->metaMapper->findAllForUser($userId);
+        $gears = $this->gearService->findAll($userId);
         return array_map(
-            fn(Activity $a) => $a->toArray(),
+            fn(Activity $a) => $this->withMeta($a, $a->getFileId() !== null ? ($metaByFile[$a->getFileId()] ?? null) : null, $gears),
             $this->activityMapper->findAllForUser($userId)
         );
     }
 
     public function getForUser(int $id, string $userId): array {
-        return $this->activityMapper->findForUser($id, $userId)->toArray();
+        $activity = $this->activityMapper->findForUser($id, $userId);
+        $this->analysisService->ensureAnalyzed($activity, $userId);
+        $meta = $activity->getFileId() !== null ? $this->metaMapper->findForFile($userId, $activity->getFileId()) : null;
+        return $this->withMeta($activity, $meta, $this->gearService->findAll($userId)) + [
+            'analysis' => $this->publicAnalysis($activity),
+        ];
+    }
+
+    /** @throws DoesNotExistException */
+    public function findEntityForUser(int $id, string $userId): Activity {
+        return $this->activityMapper->findForUser($id, $userId);
+    }
+
+    /**
+     * The activity, with its file id filled in for rows imported before it
+     * was recorded.
+     *
+     * @throws DoesNotExistException|NotFoundException
+     */
+    public function findWithFileId(int $id, string $userId): Activity {
+        $activity = $this->activityMapper->findForUser($id, $userId);
+        $this->ensureFileId($activity, $userId);
+        return $activity;
+    }
+
+    /**
+     * The activity as the API returns it: the user's name for it (the
+     * generated one stays in autoName), notes, perceived effort and the gear
+     * that counts for it.
+     *
+     * @param \OCA\FitTracker\Db\Gear[] $gears
+     */
+    private function withMeta(Activity $activity, ?Meta $meta, array $gears): array {
+        $out = $activity->toArray();
+        $out['autoName']     = $out['name'];
+        $out['name']         = $meta?->getCustomName() ?: $out['name'];
+        $out['notes']        = $meta?->getNotes() ?? '';
+        $out['rpe']          = $meta?->getRpe();
+        $out['gearId']       = GearService::effectiveGearId($activity, $meta, $gears);
+        $out['gearExplicit'] = $meta?->getGearId() !== null;
+        return $out;
+    }
+
+    // The analysis without the downsampled track (the detail page has the full trackpoints)
+    private function publicAnalysis(Activity $activity): ?array {
+        $data = $activity->getAnalysisData();
+        if ($data === null) {
+            return null;
+        }
+        unset($data['track']);
+        return $data;
+    }
+
+    /**
+     * Save what the user entered for an activity. Only keys present in
+     * $fields change: name ('' = back to the generated name), notes, rpe
+     * (1-10 or null), gearId (id, 0 = no gear, null = sport default).
+     *
+     * @throws DoesNotExistException|\InvalidArgumentException
+     */
+    public function updateMeta(int $id, string $userId, array $fields): array {
+        $activity = $this->activityMapper->findForUser($id, $userId);
+        $fileId = $this->ensureFileId($activity, $userId);
+        $meta = $this->metaMapper->findOrNew($userId, $fileId);
+
+        if (array_key_exists('name', $fields)) {
+            $name = trim((string) $fields['name']);
+            if (mb_strlen($name) > 255) {
+                throw new \InvalidArgumentException('Name is too long');
+            }
+            $meta->setCustomName($name === '' ? null : $name);
+        }
+        if (array_key_exists('notes', $fields)) {
+            $notes = trim((string) $fields['notes']);
+            if (mb_strlen($notes) > 10000) {
+                throw new \InvalidArgumentException('Notes are too long');
+            }
+            $meta->setNotes($notes === '' ? null : $notes);
+        }
+        if (array_key_exists('rpe', $fields)) {
+            $rpe = $fields['rpe'];
+            if ($rpe !== null && $rpe !== '' && (!is_numeric($rpe) || (int) $rpe < 1 || (int) $rpe > 10)) {
+                throw new \InvalidArgumentException('Effort must be between 1 and 10');
+            }
+            $meta->setRpe($rpe === null || $rpe === '' ? null : (int) $rpe);
+        }
+        if (array_key_exists('gearId', $fields)) {
+            $gearId = $fields['gearId'];
+            if ($gearId !== null && $gearId !== '' && (int) $gearId > 0) {
+                $this->gearService->find((int) $gearId, $userId); // must be the user's
+            }
+            $meta->setGearId($gearId === null || $gearId === '' ? null : max(0, (int) $gearId));
+        }
+        $this->metaMapper->save($meta);
+
+        return $this->getForUser($id, $userId);
+    }
+
+    /**
+     * Weather at the start of the activity, fetched once from Open-Meteo and
+     * cached. Null when weather is turned off, the activity has no GPS, or
+     * Open-Meteo has no data.
+     *
+     * @throws DoesNotExistException
+     */
+    public function weather(int $id, string $userId): ?array {
+        if (!$this->settings->get($userId, 'weather_enabled')) {
+            return null;
+        }
+        $activity = $this->activityMapper->findForUser($id, $userId);
+        $fileId = $this->ensureFileId($activity, $userId);
+        $meta = $this->metaMapper->findOrNew($userId, $fileId);
+        if ($meta->getWeather() !== null) {
+            $cached = json_decode($meta->getWeather(), true);
+            return is_array($cached) && $cached ? $cached : null;
+        }
+
+        $start = $this->trackpointMapper->findFirstPosition($activity->getId());
+        if ($start === null) {
+            return null;
+        }
+        $weather = $this->weatherService->fetch($start[0], $start[1], $activity->getStartTime());
+        // Cache "no data" too ([]), so it isn't asked again on every view
+        $meta->setWeather(json_encode($weather ?? []));
+        $this->metaMapper->save($meta);
+        return $weather;
+    }
+
+    /** Add all activities to the calendar chosen in settings. */
+    public function addAllToCalendar(string $userId): int {
+        $this->analysisService->analyzePending($userId, 20.0); // fills missing file ids
+        return $this->calendarService->addAll($userId, $this->activityMapper->findAllForUser($userId));
+    }
+
+    /**
+     * The .fit file id, looked up and stored for rows imported before it was
+     * recorded.
+     *
+     * @throws NotFoundException when the file is gone
+     */
+    private function ensureFileId(Activity $activity, string $userId): int {
+        if ($activity->getFileId() !== null) {
+            return $activity->getFileId();
+        }
+        $file = $this->getFitFile($userId, $activity->getFitFilePath());
+        $activity->setFileId($file->getId());
+        $this->activityMapper->update($activity);
+        return $file->getId();
     }
 
     public function getLapsForUser(int $id, string $userId): array {
@@ -186,6 +344,11 @@ class ActivityService {
     public function deleteForUser(int $id, string $userId): void {
         $activity = $this->activityMapper->findForUser($id, $userId);
         $this->trashFitFile($userId, $activity->getFitFilePath());
+        $this->calendarService->removeActivity($userId, $activity);
+        $this->shareService->deleteForActivity($activity, $userId);
+        if ($activity->getFileId() !== null) {
+            $this->metaMapper->deleteForFile($userId, $activity->getFileId());
+        }
         $this->deleteActivityRows($activity, $userId);
     }
 
@@ -399,7 +562,10 @@ class ActivityService {
         $activity->setAvgCadence($parsed['avg_cadence']);
         $activity->setAvgPower($parsed['avg_power']);
         $activity->setFitFilePath($relativePath);
+        $activity->setFileId($file->getId());
         $activity->setCreatedAt((new \DateTime())->format('Y-m-d H:i:s'));
+        $activity->setAnalysis(json_encode($this->analysisService->analyze($parsed['trackpoints'], $parsed['sport'])));
+        $activity->setAnalysisVersion(AnalysisService::VERSION);
 
         $activity = $this->activityMapper->insert($activity);
 
@@ -420,6 +586,8 @@ class ActivityService {
 
         $rows = array_map(fn($tp) => array_merge(['activity_id' => $activity->getId()], $tp), $parsed['trackpoints']);
         $this->trackpointMapper->insertBulk($rows);
+
+        $this->calendarService->addActivity($userId, $activity);
 
         return true;
     }

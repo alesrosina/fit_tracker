@@ -6,7 +6,9 @@ namespace OCA\FitTracker\Controller;
 
 use OCA\FitTracker\AppInfo\Application;
 use OCA\FitTracker\Service\ActivityService;
+use OCA\FitTracker\Service\CalendarService;
 use OCA\FitTracker\Service\FitParserService;
+use OCA\FitTracker\Service\SettingsService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -21,6 +23,8 @@ class ConfigController extends Controller {
         private ActivityService $activityService,
         private FitParserService $fitParser,
         private IUserSession   $userSession,
+        private SettingsService $settings,
+        private CalendarService $calendarService,
     ) {
         parent::__construct(Application::APP_ID, $request);
     }
@@ -31,7 +35,7 @@ class ConfigController extends Controller {
         if ($userId === null) {
             return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
         }
-        return new DataResponse(['folder_path' => $this->activityService->getFolderPath($userId)]);
+        return new DataResponse($this->settings->all($userId));
     }
 
     #[NoAdminRequired]
@@ -40,9 +44,35 @@ class ConfigController extends Controller {
         if ($userId === null) {
             return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
         }
-        $path = trim((string) $this->request->getParam('folder_path', ''));
-        $this->activityService->setFolderPath($userId, $path);
-        return new DataResponse(['folder_path' => $path]);
+        try {
+            $this->settings->update($userId, $this->request->getParams());
+        } catch (\InvalidArgumentException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+        }
+        return new DataResponse($this->settings->all($userId));
+    }
+
+    /** Calendars the user can add events to, for the calendar setting. */
+    #[NoAdminRequired]
+    public function calendars(): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        return new DataResponse($this->calendarService->writableCalendars($userId));
+    }
+
+    /** Add every activity to the chosen calendar; returns how many were new. */
+    #[NoAdminRequired]
+    public function exportCalendar(): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        if (!$this->calendarService->isEnabled($userId)) {
+            return new DataResponse(['error' => 'No calendar chosen'], Http::STATUS_BAD_REQUEST);
+        }
+        return new DataResponse(['added' => $this->activityService->addAllToCalendar($userId)]);
     }
 
     #[NoAdminRequired]

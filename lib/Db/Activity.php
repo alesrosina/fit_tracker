@@ -39,6 +39,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void setFitFilePath(string $fitFilePath)
  * @method string getCreatedAt()
  * @method void setCreatedAt(string $createdAt)
+ * @method int|null getFileId()
+ * @method void setFileId(?int $fileId)
+ * @method string|null getAnalysis()
+ * @method void setAnalysis(?string $analysis)
+ * @method int getAnalysisVersion()
+ * @method void setAnalysisVersion(int $analysisVersion)
  */
 class Activity extends Entity {
     protected string $userId = '';
@@ -57,6 +63,9 @@ class Activity extends Entity {
     protected ?int $avgPower = null;
     protected string $fitFilePath = '';
     protected string $createdAt = '';
+    protected ?int $fileId = null;
+    protected ?string $analysis = null;
+    protected int $analysisVersion = 0;
 
     public function __construct() {
         $this->addType('duration', 'integer');
@@ -69,6 +78,8 @@ class Activity extends Entity {
         $this->addType('maxSpeed', 'float');
         $this->addType('avgCadence', 'integer');
         $this->addType('avgPower', 'integer');
+        $this->addType('fileId', 'integer');
+        $this->addType('analysisVersion', 'integer');
     }
 
     // Explicit setters for required fields to ensure they are always marked
@@ -108,6 +119,15 @@ class Activity extends Entity {
         $this->markFieldUpdated('createdAt');
     }
 
+    /** Decoded analysis JSON (see AnalysisService), or null when not analyzed yet. */
+    public function getAnalysisData(): ?array {
+        if ($this->analysis === null || $this->analysis === '') {
+            return null;
+        }
+        $data = json_decode($this->analysis, true);
+        return is_array($data) ? $data : null;
+    }
+
     public function toArray(): array {
         return [
             'id'            => $this->getId(),
@@ -126,6 +146,7 @@ class Activity extends Entity {
             'avgPower'      => $this->avgPower,
             'createdAt'     => $this->createdAt,
             'fitFilePath'   => $this->fitFilePath,
+            'fileId'        => $this->fileId,
         ];
     }
 }

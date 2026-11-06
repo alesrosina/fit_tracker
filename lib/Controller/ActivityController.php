@@ -7,6 +7,7 @@ namespace OCA\FitTracker\Controller;
 use OCA\FitTracker\AppInfo\Application;
 use OCA\FitTracker\Service\ActivityService;
 use OCA\FitTracker\Service\PhotoService;
+use OCA\FitTracker\Service\StatsService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Http;
@@ -24,6 +25,7 @@ class ActivityController extends Controller {
         private ActivityService    $activityService,
         private PhotoService       $photoService,
         private IUserSession       $userSession,
+        private StatsService       $statsService,
     ) {
         parent::__construct(Application::APP_ID, $request);
     }
@@ -54,7 +56,9 @@ class ActivityController extends Controller {
             return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
         }
         try {
-            return new DataResponse($this->activityService->getForUser($id, $userId));
+            return new DataResponse($this->activityService->getForUser($id, $userId) + [
+                'hrSettings' => $this->statsService->heartRateSettings($userId),
+            ]);
         } catch (DoesNotExistException) {
             return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
         }
@@ -164,6 +168,41 @@ class ActivityController extends Controller {
             return new DataResponse($this->activityService->reimportAll($userId));
         } catch (\Throwable $e) {
             return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[NoAdminRequired]
+    public function updateMeta(int $id): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        $fields = array_intersect_key($this->request->getParams(), array_flip(['name', 'notes', 'rpe', 'gearId']));
+        try {
+            return new DataResponse($this->activityService->updateMeta($id, $userId, $fields));
+        } catch (DoesNotExistException) {
+            return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+        } catch (NotFoundException) {
+            return new DataResponse(['error' => 'file_missing'], Http::STATUS_CONFLICT);
+        } catch (\InvalidArgumentException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+        }
+    }
+
+    #[NoAdminRequired]
+    public function weather(int $id): DataResponse {
+        $userId = $this->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'Not authenticated'], Http::STATUS_UNAUTHORIZED);
+        }
+        try {
+            return new DataResponse(['weather' => $this->activityService->weather($id, $userId)]);
+        } catch (DoesNotExistException) {
+            return new DataResponse(['error' => 'Not found'], Http::STATUS_NOT_FOUND);
+        } catch (NotFoundException) {
+            return new DataResponse(['weather' => null]);
+        } catch (\Throwable $e) {
+            return new DataResponse(['error' => 'weather_unavailable'], Http::STATUS_BAD_GATEWAY);
         }
     }
 
