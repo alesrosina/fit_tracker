@@ -16,7 +16,7 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
 ### Activity tracking
 
 - **Supported sports:** the full Garmin FIT sport list — Running, Cycling, Hiking, Walking, Swimming, Gym, Breathwork, Meditation, Skiing, and dozens more (sailing, golf, rowing, kayaking, tennis, climbing, ...). Sports without a dedicated icon still import fine with a generic icon and a title-cased label
-- **Dashboard** shows a monthly activity calendar and a last-7-days bar chart
+- **Dashboard** for the last 7, 30 or 365 days, all time or a custom range: totals compared with the previous timeframe, progress on goals, a chart over the timeframe, training, highlights, gear, sleep and the activities in the timeframe. Each sport has the same dashboard
 - **Sidebar navigation** only lists the sport types (and Sleep) you actually have imported activities for
 - **Activity cards** display distance, duration, average heart rate, and calories
 - **Share button** on the activity detail page generates a shareable image card (route map + key stats) for the activity
@@ -42,6 +42,18 @@ FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Ga
   - Full sleep timeline — a coloured horizontal band showing every stage transition across the night with hour marks
   - Stage table with timestamps and per-stage duration
 
+### Insights
+
+- **Trends:** totals per week, month or year by sport, a year-over-year comparison, fitness / fatigue / form from heart rate training load (TRIMP), and time in heart rate zones per week
+- **Records:** fastest times from 400 m to the marathon and over 5–100 km on the bike, best power from 5 seconds to an hour, and the longest distance, time and climb per sport
+- **Heatmap:** every GPS route on one map, with the photos taken along them
+- **Gear:** shoes, bikes and other gear with the distance put on them and a reminder when it is time to replace them. Gear can be the default for a sport from a start date, or be picked per activity
+- **Goals:** weekly, monthly or yearly targets for distance, time, elevation, activities, active days, calories, training load and sleep. The dashboard scales them to the selected timeframe; the goals page shows which weeks, months or years they were reached
+- **Activity details:** heart rate zones, splits per km or mile, power analysis (normalized power, intensity factor, TSS, power curve), route coloured by speed, heart rate or elevation, and charts linked to the map. Activities can be renamed and get notes, perceived effort and gear
+- **Sharing:** besides the image card, a public link with the route, stats and charts; the first and last 200 m of the route can be hidden
+- **Sleep trends:** averages, regularity of bed and wake times, weekday vs weekend, and how you sleep after rest days and harder training days
+- **Nextcloud Dashboard widget** with this week's totals, the last sleep and recent activities
+
 ### Settings
 
 Open **Settings** at the bottom of the navigation:
@@ -49,7 +61,12 @@ Open **Settings** at the bottom of the navigation:
 - **Source folder:** choose any folder in your Nextcloud as the source for `.fit` files; it is saved right away
 - **Sync now:** import new `.fit` files from the folder. This also happens automatically every time the app is opened, so you only need it after adding files while the app is open
 - **Re-check sport types** reclassifies already-imported activities under the current sport detection logic, and moves any that turn out to be sleep/nap files over to Sleep
-- **Re-import all files** removes all imported data and imports every `.fit` file in the folder again — useful after an update that improves file reading
+- **Re-import all files** removes all imported data and imports every `.fit` file in the folder again — useful after an update that improves file reading. Names, notes, gear and public links you added are kept
+- **Units:** metric or imperial
+- **Heart rate and power:** maximum and resting heart rate for zones and training load (by default the highest recorded heart rate and 60 bpm), and FTP for power analysis
+- **Weather:** show the weather at the start of each activity, from [Open-Meteo](https://open-meteo.com/). Off by default; when on, the start location rounded to about 1 km and the date are sent to open-meteo.com
+- **Calendar:** add every new activity as an event to one of your calendars, and add existing ones in one go
+- **Public links:** see and delete all public activity links
 
 ---
 

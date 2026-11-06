@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.0]
+
+This is a big release for statistics: FIT Tracker now has an overview with goals, trends, records, a heatmap and gear tracking.
+
+### Added
+- **Overview** dashboard for the last 7, 30 or 365 days, all time or a custom range: totals compared with the previous period, goal progress, a chart, training load, highlights, gear and sleep. Each sport has the same view
+- **Goals** for activities and sleep, per week, month or year
+- **Trends**, **Records**, **Heatmap** (with photos taken along the routes) and **Gear** pages
+- Activity details: heart rate zones, splits, power analysis, coloured route, weather, and editable name, notes, effort and gear
+- Sleep page with the same timeframes: averages, best and worst night, sleep debt, regularity and sleep after training
+- Public links to activities, calendar events for activities, and a Nextcloud Dashboard widget
+- Settings for units (metric or imperial), heart rate and FTP
+
+### Changed
+- The month calendar and week chart on the first page are replaced by the Overview
+
+### Fixed
+- Times are shown in local time instead of UTC
+- Deleting an account also removes its FIT Tracker data
+
 ## [1.2.0]
 
 ### Changed
