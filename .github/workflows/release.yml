@@ -43,46 +43,76 @@ jobs:
           echo "${{ secrets.APP_PRIVATE_KEY }}" > /tmp/${{ env.APP_ID }}.key
           echo "${{ secrets.APP_CERTIFICATE }}" > /tmp/${{ env.APP_ID }}.crt
 
-      - name: Sign the app
+      # Stage exactly the files that ship. Signing and the tarball both use this
+      # directory, so signature.json lists only files that are actually in the archive.
+      - name: Stage release files
         run: |
-          php -r "
-            \$appPath = '${{ github.workspace }}';
-            \$hashes  = [];
-            \$it = new RecursiveIteratorIterator(
-              new RecursiveDirectoryIterator(\$appPath, FilesystemIterator::SKIP_DOTS)
+          STAGE=/tmp/build/${{ env.APP_ID }}
+          rm -rf /tmp/build && mkdir -p "$STAGE"
+          rsync -a \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.claude/' \
+            --exclude='.gitignore' \
+            --exclude='.l10nignore' \
+            --exclude='node_modules/' \
+            --exclude='src/' \
+            --exclude='docs/' \
+            --exclude='tests/' \
+            --exclude='webpack.js' \
+            --exclude='package.json' \
+            --exclude='package-lock.json' \
+            --exclude='composer.json' \
+            --exclude='composer.lock' \
+            --exclude='appinfo/signature.json' \
+            ./ "$STAGE/"
+          echo "Staged $(find "$STAGE" -type f | wc -l) files"
+
+      # Nextcloud's IntegrityCheck\Checker verifies with phpseclib using
+      # RSA-PSS, hash SHA-1, MGF1 SHA-512, salt length 0, over json_encode(ksort(hashes)).
+      # PHP's openssl_sign() can't do PSS, so PHP builds the payload and openssl signs it.
+      - name: Sign the app (code integrity)
+        run: |
+          STAGE=/tmp/build/${{ env.APP_ID }}
+          php -r '
+            $appPath = $argv[1];
+            $hashes  = [];
+            $it = new RecursiveIteratorIterator(
+              new RecursiveDirectoryIterator($appPath, FilesystemIterator::SKIP_DOTS)
             );
-            foreach (\$it as \$f) {
-              if (!\$f->isFile()) continue;
-              \$rel = ltrim(str_replace(\$appPath, '', \$f->getPathname()), '/');
-              if (\$rel === 'appinfo/signature.json') continue;
-              \$hashes[\$rel] = hash_file('sha512', \$f->getPathname());
+            foreach ($it as $f) {
+              if (!$f->isFile()) continue;
+              $rel = substr($f->getPathname(), strlen($appPath) + 1);
+              if ($rel === "appinfo/signature.json") continue;
+              $hashes[$rel] = hash_file("sha512", $f->getPathname());
             }
-            ksort(\$hashes);
-            \$key = openssl_pkey_get_private(file_get_contents('/tmp/${{ env.APP_ID }}.key'));
-            openssl_sign(json_encode(\$hashes), \$sig, \$key, OPENSSL_ALGO_SHA512);
-            file_put_contents(\$appPath . '/appinfo/signature.json', json_encode([
-              'hashes'      => \$hashes,
-              'signature'   => base64_encode(\$sig),
-              'certificate' => file_get_contents('/tmp/${{ env.APP_ID }}.crt'),
-            ]));
-            echo 'App signed successfully.' . PHP_EOL;
-          "
+            ksort($hashes);
+            file_put_contents("/tmp/payload.json", json_encode($hashes));
+          ' "$STAGE"
+
+          openssl dgst -sha1 -sign /tmp/${{ env.APP_ID }}.key \
+            -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:0 -sigopt rsa_mgf1_md:sha512 \
+            -out /tmp/payload.sig /tmp/payload.json
+
+          # Sanity check with the certificate's public key, same parameters.
+          openssl x509 -in /tmp/${{ env.APP_ID }}.crt -pubkey -noout > /tmp/pub.pem
+          openssl dgst -sha1 -verify /tmp/pub.pem \
+            -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:0 -sigopt rsa_mgf1_md:sha512 \
+            -signature /tmp/payload.sig /tmp/payload.json
+
+          php -r '
+            file_put_contents($argv[1] . "/appinfo/signature.json", json_encode([
+              "hashes"      => json_decode(file_get_contents("/tmp/payload.json"), true),
+              "signature"   => base64_encode(file_get_contents("/tmp/payload.sig")),
+              "certificate" => file_get_contents($argv[2]),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+          ' "$STAGE" /tmp/${{ env.APP_ID }}.crt
+          echo "App signed: $(php -r 'echo count(json_decode(file_get_contents($argv[1]), true)["hashes"]);' "$STAGE/appinfo/signature.json") files"
 
       - name: Create release tarball
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          cd ..
-          tar -czf ${{ env.APP_ID }}-${VERSION}.tar.gz \
-            --exclude="${{ env.APP_ID }}/.git" \
-            --exclude="${{ env.APP_ID }}/node_modules" \
-            --exclude="${{ env.APP_ID }}/src" \
-            --exclude="${{ env.APP_ID }}/.github" \
-            --exclude="${{ env.APP_ID }}/webpack.js" \
-            --exclude="${{ env.APP_ID }}/package*.json" \
-            --exclude="${{ env.APP_ID }}/composer.json" \
-            --exclude="${{ env.APP_ID }}/composer.lock" \
-            ${{ env.APP_ID }}
-          mv ${{ env.APP_ID }}-${VERSION}.tar.gz ${{ github.workspace }}/
+          tar -czf ${{ github.workspace }}/${{ env.APP_ID }}-${VERSION}.tar.gz -C /tmp/build ${{ env.APP_ID }}
 
       - name: Sign tarball and prepare release metadata
         id: meta
