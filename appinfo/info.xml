@@ -22,7 +22,7 @@ Trends per week, month and year with a year-over-year comparison, fitness and fa
 
 ⚙️ **Settings**
 Choose any folder in your Nextcloud as the source for .fit files. New files are imported automatically every time the app is opened, or on demand with "Sync now". A "Re-check sport types" button lets you reclassify already-imported activities under the current sport detection logic, including moving mis-imported sleep/nap files over to Sleep, and "Re-import all files" reads every file again from scratch.]]></description>
-    <version>1.3.0</version>
+    <version>1.3.1</version>
     <licence>agpl</licence>
     <author mail="me@alesrosina.com">Ales Rosina</author>
     <namespace>FitTracker</namespace>

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.1]
+
+### Changed
+- README and app store screenshots show the new Overview, activity and sleep pages
+- The Goals and Trends pages refer to the Overview instead of "the dashboard"
+
 ## [1.3.0]
 
 This is a big release for statistics: FIT Tracker now has an overview with goals, trends, records, a heatmap and gear tracking.
