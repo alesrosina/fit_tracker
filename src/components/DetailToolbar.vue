@@ -14,6 +14,9 @@
             </span>
             <NcActions
                 v-else :aria-label="t('fit_tracker', 'More actions')">
+                <!-- Page-specific actions, listed before the file actions -->
+                <slot name="menu" />
+                <NcActionSeparator v-if="$slots.menu" />
                 <NcActionButton close-after-click @click="$emit('reimport')">
                     <template #icon>
                         <NcIconSvgWrapper :svg="icons.refresh" :size="20" />
@@ -46,8 +49,8 @@ import { t } from '@nextcloud/l10n'
 import { icons } from '../icons.js'
 
 // Top bar of the activity and sleep detail pages: a back link, optional extra
-// actions in the slot, and a "⋯" menu with "Re-import from file" and, last,
-// "Delete", which is confirmed in an NcDialog.
+// actions in the slot, and a "⋯" menu with the #menu slot's actions,
+// "Re-import from file" and, last, "Delete", which is confirmed in an NcDialog.
 export default {
     name: 'DetailToolbar',
     components: { NcActions, NcActionButton, NcActionSeparator, NcButton, NcDialog, NcIconSvgWrapper, NcLoadingIcon },

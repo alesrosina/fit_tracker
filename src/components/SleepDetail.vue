@@ -1,7 +1,7 @@
 <template>
     <div class="sleep-detail">
         <DetailToolbar
-            back-to="/sleep"
+:back-to="backRoute"
             :back-label="t('fit_tracker', 'Sleep')"
             :show-actions="!!session"
             :delete-label="t('fit_tracker', 'Delete sleep session')"
@@ -121,8 +121,9 @@ import LoadError from './LoadError.vue'
 import SportBadge from './SportBadge.vue'
 import { STAGE_COLORS, stageLabel } from '../sleepStages.js'
 import { icons } from '../icons.js'
-import { formatDurationShort, formatDateTime, formatTime } from '../format.js'
+import { formatDurationShort, formatDateTime, formatTime, parseDate } from '../format.js'
 import { deleteItem, reimportItem, fileName } from '../fileActions.js'
+import { sleepRoute } from '../timeframe.js'
 
 export default {
     name: 'SleepDetail',
@@ -141,6 +142,10 @@ export default {
         }
     },
     computed: {
+        // Back to the sleep page with the timeframe it was opened from
+        backRoute() {
+            return sleepRoute()
+        },
         busyLabel() {
             if (this.busy === 'reimport') return t('fit_tracker', 'Re-importing…')
             if (this.busy === 'delete') return t('fit_tracker', 'Deleting…')
@@ -170,19 +175,19 @@ export default {
         },
         totalSecs() {
             if (!this.stages.length) return 0
-            const t0 = new Date(this.stages[0].timestamp.replace(' ', 'T'))
-            const tN = new Date(this.stages[this.stages.length - 1].timestamp.replace(' ', 'T'))
+            const t0 = parseDate(this.stages[0].timestamp)
+            const tN = parseDate(this.stages[this.stages.length - 1].timestamp)
             return (tN - t0) / 1000 || this.session?.duration || 1
         },
         timelineSegments() {
             const segs = []
-            const t0   = this.stages.length ? new Date(this.stages[0].timestamp.replace(' ', 'T')) : null
+            const t0   = this.stages.length ? parseDate(this.stages[0].timestamp) : null
             const tot  = this.totalSecs
             for (let i = 0; i < this.stages.length; i++) {
                 const curr = this.stages[i]
                 const next = this.stages[i + 1]
-                const tCurr = new Date(curr.timestamp.replace(' ', 'T'))
-                const tNext = next ? new Date(next.timestamp.replace(' ', 'T')) : new Date(tCurr.getTime() + 60000)
+                const tCurr = parseDate(curr.timestamp)
+                const tNext = next ? parseDate(next.timestamp) : new Date(tCurr.getTime() + 60000)
                 const durSec = (tNext - tCurr) / 1000
                 segs.push({
                     color:   STAGE_COLORS[curr.stage] ?? STAGE_COLORS.unmeasurable,
@@ -195,7 +200,7 @@ export default {
         },
         timeMarks() {
             if (!this.stages.length) return []
-            const t0  = new Date(this.stages[0].timestamp.replace(' ', 'T'))
+            const t0  = parseDate(this.stages[0].timestamp)
             const tot = this.totalSecs
             const marks = []
             // Mark every full hour
@@ -216,8 +221,8 @@ export default {
         stageRows() {
             return this.stages.map((s, i) => {
                 const next    = this.stages[i + 1]
-                const tCurr   = new Date(s.timestamp.replace(' ', 'T'))
-                const tNext   = next ? new Date(next.timestamp.replace(' ', 'T')) : null
+                const tCurr   = parseDate(s.timestamp)
+                const tNext   = next ? parseDate(next.timestamp) : null
                 const durSec  = tNext ? Math.round((tNext - tCurr) / 1000) : null
                 return {
                     time:   tCurr.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
@@ -260,7 +265,7 @@ export default {
             this.busy = 'delete'
             const deleted = await deleteItem('sleep', this.id, this.session?.fitFilePath)
             this.busy = null
-            if (deleted) this.$router.push('/sleep')
+            if (deleted) this.$router.push(this.backRoute)
         },
         async reimport() {
             // The content is about to be replaced: show the skeleton meanwhile

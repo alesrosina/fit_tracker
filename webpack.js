@@ -4,6 +4,7 @@ const webpackConfig = require('@nextcloud/webpack-vue-config')
 
 webpackConfig.entry = {
     'fit_tracker-main': path.join(__dirname, 'src', 'main.js'),
+    'fit_tracker-public': path.join(__dirname, 'src', 'public.js'),
 }
 
 webpackConfig.output = {

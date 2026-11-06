@@ -28,3 +28,103 @@
 @media (prefers-reduced-motion: reduce) {
     .ft-skeleton { animation: none; }
 }
+
+/* Data tables (laps, splits, records). On narrow screens each row becomes a
+   card with the column name next to each value, taken from data-label. */
+.ft-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.ft-table th, .ft-table td {
+    padding: var(--ft-gap-2) var(--ft-gap-3);
+    text-align: start;
+    border-bottom: 1px solid var(--color-border);
+}
+.ft-table th {
+    font-size: var(--font-size-small);
+    font-weight: bold;
+    color: var(--color-text-maxcontrast);
+}
+@media (max-width: 600px) {
+    .ft-table thead { display: none; }
+    .ft-table, .ft-table tbody, .ft-table tr, .ft-table td {
+        display: block;
+        width: 100%;
+    }
+    .ft-table tr {
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius-element);
+        margin-bottom: var(--ft-gap-2);
+        padding: var(--ft-gap-1) var(--ft-gap-3);
+    }
+    .ft-table td {
+        display: flex;
+        justify-content: space-between;
+        padding: var(--ft-gap-1) 0;
+        border-bottom: none;
+    }
+    .ft-table td::before {
+        content: attr(data-label);
+        font-weight: bold;
+        color: var(--color-text-maxcontrast);
+        margin-inline-end: var(--ft-gap-3);
+    }
+}
+
+/* Panels and stat tiles shared by the insight pages */
+.ft-page {
+    padding: 0 var(--ft-gap-5) var(--ft-gap-6);
+    max-width: 1000px;
+}
+.ft-page-title {
+    margin: 0 0 var(--ft-gap-5) var(--ft-gap-8);
+    padding-top: var(--ft-gap-2);
+    font-size: 20px;
+    font-weight: bold;
+}
+.ft-panel {
+    background: var(--color-main-background);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-container);
+    padding: var(--ft-gap-4);
+    margin-bottom: var(--ft-gap-5);
+}
+.ft-panel h3 {
+    margin-top: 0;
+}
+.ft-panel__hint {
+    font-size: var(--font-size-small);
+    color: var(--color-text-maxcontrast);
+}
+.ft-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--ft-gap-3);
+    margin-bottom: var(--ft-gap-4);
+}
+.ft-stat {
+    background: var(--color-background-dark);
+    border-radius: var(--border-radius-element);
+    padding: var(--ft-gap-3);
+    text-align: center;
+}
+.ft-stat__label {
+    font-size: var(--font-size-small);
+    color: var(--color-text-maxcontrast);
+    margin-bottom: var(--ft-gap-1);
+}
+.ft-stat__value {
+    font-size: 20px;
+    font-weight: bold;
+}
+.ft-stat__sub {
+    font-size: var(--font-size-small);
+    color: var(--color-text-maxcontrast);
+}
+.ft-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--ft-gap-3);
+    margin-bottom: var(--ft-gap-4);
+}

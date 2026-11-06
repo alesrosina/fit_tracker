@@ -1,0 +1,109 @@
+/* Photo pins and popups on Leaflet maps (photoMarkers.js). Not scoped:
+   Leaflet renders this HTML outside the Vue components. */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+    background: var(--color-main-background);
+    color: var(--color-main-text);
+}
+.photo-pin {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--border-radius-pill);
+    background: var(--color-primary-element);
+    color: var(--color-primary-element-text);
+    border: 2px solid var(--color-main-background);
+    box-shadow: 0 0 4px var(--color-box-shadow);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    box-sizing: border-box;
+}
+.photo-pin__count {
+    position: absolute;
+    top: -6px;
+    right: -8px;
+    background: var(--color-main-background);
+    color: var(--color-main-text);
+    border: 1px solid var(--color-border-maxcontrast);
+    font-size: var(--font-size-small);
+    font-weight: bold;
+    border-radius: var(--border-radius-pill);
+    padding: 0 var(--ft-gap-1);
+    line-height: 16px;
+    min-width: 16px;
+    text-align: center;
+}
+.photo-popup {
+    font-size: var(--font-size-small);
+    width: 160px;
+}
+.photo-carousel {
+    position: relative;
+    width: 160px;
+    height: 160px;
+}
+.photo-carousel__img {
+    width: 160px;
+    height: 160px;
+    object-fit: cover;
+    border-radius: var(--border-radius-small);
+    display: block;
+    cursor: pointer;
+}
+.photo-carousel__img:focus-visible {
+    outline: 2px solid var(--color-primary-element);
+    outline-offset: 2px;
+}
+/* Overlaid on the photo, so a fixed dark scrim keeps the icon legible */
+.photo-carousel__btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: var(--default-clickable-area);
+    height: var(--default-clickable-area);
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: var(--border-radius-pill);
+    background-color: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    fill: currentColor;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.photo-carousel__btn svg {
+    width: 20px;
+    height: 20px;
+}
+.photo-carousel__btn:hover,
+.photo-carousel__btn:focus-visible { background-color: rgba(0, 0, 0, 0.7); }
+.photo-carousel__btn--prev { left: var(--ft-gap-1); }
+.photo-carousel__btn--next { right: var(--ft-gap-1); }
+.photo-carousel__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--ft-gap-2);
+    margin-top: var(--ft-gap-1);
+    color: var(--color-text-maxcontrast);
+}
+.photo-carousel__counter {
+    font-weight: bold;
+    white-space: nowrap;
+}
+.photo-carousel__caption {
+    display: block;
+    margin-top: var(--ft-gap-1);
+    font-weight: bold;
+    color: var(--color-main-text) !important;
+    text-decoration: underline;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

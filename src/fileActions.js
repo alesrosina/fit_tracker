@@ -2,6 +2,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { t } from '@nextcloud/l10n'
 import { showError, showSuccess, showWarning } from '@nextcloud/dialogs'
+import { dashboardRoute, sleepRoute } from './timeframe.js'
 
 const refresh = () => window.dispatchEvent(new CustomEvent('fit-tracker:refresh'))
 
@@ -64,7 +65,7 @@ export async function reimportItem(kind, id, router) {
         router.replace('/sleep/' + data.id)
     } else {
         showWarning(t('fit_tracker', 'The file contains no activity or sleep data, so it is no longer shown.'))
-        router.replace(kind === 'sleep' ? '/sleep' : '/')
+        router.replace(kind === 'sleep' ? sleepRoute() : dashboardRoute())
     }
     return true
 }

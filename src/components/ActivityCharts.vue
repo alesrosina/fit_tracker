@@ -1,5 +1,5 @@
 <template>
-    <div class="activity-charts">
+    <div class="activity-charts" @mouseleave="$emit('hover', null)">
         <h3>{{ t('fit_tracker', 'Charts') }}</h3>
         <div class="charts-grid">
             <div v-if="hasHR" class="chart-wrap">
@@ -7,8 +7,8 @@
                 <canvas ref="hrCanvas" role="img" :aria-label="t('fit_tracker', 'Heart rate (bpm)')"></canvas>
             </div>
             <div v-if="hasAlt" class="chart-wrap">
-                <h4 class="chart-label">{{ t('fit_tracker', 'Elevation (m)') }}</h4>
-                <canvas ref="altCanvas" role="img" :aria-label="t('fit_tracker', 'Elevation (m)')"></canvas>
+                <h4 class="chart-label">{{ elevationLabel }}</h4>
+                <canvas ref="altCanvas" role="img" :aria-label="elevationLabel"></canvas>
             </div>
             <div v-if="hasSpeed" class="chart-wrap">
                 <h4 class="chart-label">{{ speedLabel }}</h4>
@@ -18,9 +18,9 @@
                 <h4 class="chart-label">{{ t('fit_tracker', 'Power (W)') }}</h4>
                 <canvas ref="powerCanvas" role="img" :aria-label="t('fit_tracker', 'Power (W)')"></canvas>
             </div>
-            <div v-if="showSpeedKm" class="chart-wrap">
-                <h4 class="chart-label">{{ t('fit_tracker', 'Speed per km (km/h)') }}</h4>
-                <canvas ref="cyclingSpeedCanvas" role="img" :aria-label="t('fit_tracker', 'Speed per km (km/h)')"></canvas>
+            <div v-if="showSpeedPerUnit" class="chart-wrap">
+                <h4 class="chart-label">{{ speedPerUnitLabel }}</h4>
+                <canvas ref="cyclingSpeedCanvas" role="img" :aria-label="speedPerUnitLabel"></canvas>
             </div>
         </div>
     </div>
@@ -31,34 +31,33 @@ import { Chart, LineController, LineElement, PointElement, LinearScale, Category
 import { t } from '@nextcloud/l10n'
 import { SPEED_NOT_PACE_SPORTS } from '../sports.js'
 import { baseChartOptions } from '../chartTheme.js'
-import { formatDurationClock } from '../format.js'
+import {
+    parseDate, formatMinutes, formatDurationClock, isImperial, splitKm,
+    distanceValue, elevationValue, speedValue, paceValue, speedUnit, paceUnit, elevationUnit, distanceUnit,
+} from '../format.js'
 Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Filler, Tooltip)
 
 const SAMPLE_MAX = 300
 
-function downsample(arr, max) {
-    if (arr.length <= max) return arr
-    const step = arr.length / max
-    const out = []
-    for (let i = 0; i < max; i++) {
-        out.push(arr[Math.round(i * step)])
-    }
-    return out
+// Indices of the trackpoints kept when showing at most `max` points
+function sampleIndices(length, max) {
+    if (length <= max) return Array.from({ length }, (_, i) => i)
+    const step = length / max
+    return Array.from({ length: max }, (_, i) => Math.round(i * step))
 }
 
-// Like downsample(), but averages each bucket instead of picking one point, so single noisy samples don't survive
-function downsampleAvg(arr, max) {
-    if (arr.length <= max) return arr
-    const step = arr.length / max
-    const out = []
-    for (let i = 0; i < max; i++) {
+// Averages each bucket between sampled indices instead of picking one point,
+// so single noisy samples don't survive
+function downsampleAvg(arr, indices) {
+    if (indices.length === arr.length) return arr
+    return indices.map((start, i) => {
+        const end = indices[i + 1] ?? arr.length
         let sum = 0, n = 0
-        for (let j = Math.floor(i * step); j < Math.floor((i + 1) * step); j++) {
+        for (let j = start; j < end; j++) {
             if (arr[j] !== null) { sum += arr[j]; n++ }
         }
-        out.push(n ? sum / n : null)
-    }
-    return out
+        return n ? sum / n : null
+    })
 }
 
 // Centered moving average ignoring nulls; smooths per-second GPS jitter
@@ -84,55 +83,26 @@ function median(values) {
     return sorted.length ? sorted[Math.floor(sorted.length / 2)] : null
 }
 
-// Minutes per km → "5:30"
-const formatPaceAxis = min => formatDurationClock(min * 60)
-
-function buildChart(canvas, label, data, color, labels = null, { showXAxis = false, y = {}, formatValue = null, fill = true } = {}) {
-    const base = baseChartOptions()
-    return new Chart(canvas, {
-        type: 'line',
-        data: {
-            labels: labels ?? data.map((_, i) => i),
-            datasets: [{
-                label,
-                data,
-                borderColor: color,
-                backgroundColor: color + '33',
-                borderWidth: 1.5,
-                pointRadius: 0,
-                fill,
-                tension: 0.3,
-                spanGaps: true,
-            }],
-        },
-        options: {
-            responsive: true,
-            animation: false,
-            plugins: {
-                tooltip: {
-                    ...base.tooltip,
-                    mode: 'index',
-                    intersect: false,
-                    callbacks: formatValue ? { label: ctx => `${label}: ${formatValue(ctx.parsed.y)}` } : {},
-                },
-                legend: { display: false },
-            },
-            scales: {
-                x: {
-                    display: showXAxis,
-                    ticks: { ...base.ticks, maxTicksLimit: 10 },
-                    grid: base.grid,
-                    border: { color: base.grid.color },
-                },
-                y: {
-                    ...y,
-                    ticks: { ...base.ticks, ...(formatValue ? { callback: formatValue } : {}) },
-                    grid: base.grid,
-                    border: { color: base.grid.color },
-                },
-            },
-        },
-    })
+// Draws a vertical line at chart.$highlight (a data index), the same moment
+// highlighted in every chart and on the map
+const crosshairPlugin = {
+    id: 'ftCrosshair',
+    afterDatasetsDraw(chart) {
+        const index = chart.$highlight
+        if (index === null || index === undefined) return
+        const x = chart.scales.x.getPixelForValue(index)
+        if (!Number.isFinite(x)) return
+        const { top, bottom } = chart.chartArea
+        const ctx = chart.ctx
+        ctx.save()
+        ctx.strokeStyle = chart.$crosshairColor ?? '#888'
+        ctx.lineWidth = 1
+        ctx.beginPath()
+        ctx.moveTo(x, top)
+        ctx.lineTo(x, bottom)
+        ctx.stroke()
+        ctx.restore()
+    },
 }
 
 export default {
@@ -140,11 +110,19 @@ export default {
     props: {
         trackpoints: { type: Array, required: true },
         sport: { type: String, default: 'running' },
+        // Trackpoint index to mark with a vertical line (hovered here or on the map)
+        highlightIndex: { type: Number, default: null },
+    },
+    emits: ['hover'],
+    created() {
+        // Not in data(): Chart.js instances must not become reactive proxies
+        this.charts = []
     },
     computed: {
-        sampled() { return downsample(this.trackpoints, SAMPLE_MAX) },
+        sampleIdx() { return sampleIndices(this.trackpoints.length, SAMPLE_MAX) },
+        sampled() { return this.sampleIdx.map(i => this.trackpoints[i]) },
         hrData()    { return this.sampled.map(tp => tp.heartRate) },
-        altData()   { return this.sampled.map(tp => tp.altitude) },
+        altData()   { return this.sampled.map(tp => tp.altitude === null ? null : elevationValue(tp.altitude)) },
         // Factor converting tp.distance to km: FIT parser (metric) stores km, but tolerate meters too
         distScale() {
             const maxDist = this.trackpoints.reduce((m, tp) => Math.max(m, tp.distance ?? 0), 0)
@@ -158,7 +136,7 @@ export default {
             for (let i = 1; i < tps.length; i++) {
                 const prev = tps[i - 1], curr = tps[i]
                 if (curr.distance !== null && prev.distance !== null && curr.timestamp && prev.timestamp) {
-                    const dt = (new Date(curr.timestamp.replace(' ', 'T')) - new Date(prev.timestamp.replace(' ', 'T'))) / 1000
+                    const dt = (parseDate(curr.timestamp) - parseDate(prev.timestamp)) / 1000
                     if (dt > 0 && dt < 60) speeds[i] = (curr.distance - prev.distance) * this.distScale / dt * 3600
                 }
             }
@@ -166,10 +144,9 @@ export default {
         },
         speedData() {
             // Smooth and average speed first, then invert: averaging pace directly would be dominated by slow samples
-            const speeds = downsampleAvg(smooth(this.resolvedSpeed, SPEED_SMOOTH_RADIUS), SAMPLE_MAX)
-            if (!this.isPace) return speeds
-            // speed is km/h; for running show pace (min/km)
-            const paces = speeds.map(speed => speed === null ? null : 60 / Math.max(speed, 0.1))
+            const speeds = downsampleAvg(smooth(this.resolvedSpeed, SPEED_SMOOTH_RADIUS), this.sampleIdx)
+            if (!this.isPace) return speeds.map(s => s === null ? null : speedValue(s))
+            const paces = speeds.map(speed => speed === null ? null : paceValue(Math.max(speed, 0.1)))
             const cap = Math.min(PACE_CAP_MAX, Math.ceil(median(paces) * PACE_CAP_FACTOR / 5) * 5)
             return paces.map(p => p === null ? null : Math.min(p, cap))
         },
@@ -177,20 +154,15 @@ export default {
         sampledLabels() {
             const tps = this.sampled
             if (!tps.length) return []
-            const firstTs = tps[0].timestamp ? new Date(tps[0].timestamp.replace(' ', 'T')) : null
+            const firstTs = tps[0].timestamp ? parseDate(tps[0].timestamp) : null
             return tps.map(tp => {
                 const parts = []
-                if (tp.distance !== null) parts.push(t('fit_tracker', '{km} km', { km: (tp.distance * this.distScale).toFixed(2) }))
+                if (tp.distance !== null) {
+                    parts.push(`${distanceValue(tp.distance * this.distScale).toFixed(2)} ${distanceUnit()}`)
+                }
                 if (firstTs && tp.timestamp) {
-                    const elapsed = (new Date(tp.timestamp.replace(' ', 'T')) - firstTs) / 1000
-                    if (elapsed >= 0) {
-                        const h = Math.floor(elapsed / 3600)
-                        const m = Math.floor((elapsed % 3600) / 60)
-                        const s = Math.floor(elapsed % 60)
-                        parts.push(h > 0
-                            ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
-                            : `${m}:${String(s).padStart(2,'0')}`)
-                    }
+                    const elapsed = (parseDate(tp.timestamp) - firstTs) / 1000
+                    if (elapsed >= 0) parts.push(formatDurationClock(Math.floor(elapsed)))
                 }
                 return parts.join(' | ') || null
             })
@@ -202,18 +174,109 @@ export default {
         isPace() { return !SPEED_NOT_PACE_SPORTS.includes(this.sport) },
         speedLabel() {
             return !this.isPace
-                ? t('fit_tracker', 'Speed (km/h)')
-                : t('fit_tracker', 'Pace (min/km)')
+                ? t('fit_tracker', 'Speed ({unit})', { unit: speedUnit() })
+                : t('fit_tracker', 'Pace ({unit})', { unit: paceUnit() })
+        },
+        elevationLabel() {
+            return t('fit_tracker', 'Elevation ({unit})', { unit: elevationUnit() })
+        },
+        speedPerUnitLabel() {
+            return isImperial()
+                ? t('fit_tracker', 'Speed per mile ({unit})', { unit: speedUnit() })
+                : t('fit_tracker', 'Speed per km ({unit})', { unit: speedUnit() })
         },
         isRunOrCycle() {
             return this.sport === 'cycling' || this.sport === 'running'
         },
-        showSpeedKm() { return this.isRunOrCycle && this.hasSpeed },
+        showSpeedPerUnit() { return this.isRunOrCycle && this.hasSpeed },
+    },
+    watch: {
+        highlightIndex(index) {
+            const sample = index === null ? null : this.nearestSample(index)
+            for (const chart of this.charts) {
+                if (chart.$timeline && chart.$highlight !== sample) {
+                    chart.$highlight = sample
+                    chart.draw()
+                }
+            }
+        },
     },
     mounted() {
         this.$nextTick(() => this.buildCharts())
     },
+    beforeUnmount() {
+        this.charts.forEach(c => c.destroy())
+    },
     methods: {
+        nearestSample(tpIndex) {
+            const idx = this.sampleIdx
+            let lo = 0, hi = idx.length - 1
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1
+                if (idx[mid] < tpIndex) lo = mid + 1
+                else hi = mid
+            }
+            return lo
+        },
+        // timeline: x axis is the sampled trackpoints, so hovering maps to a position on the route
+        buildChart(canvas, label, data, color, labels, { showXAxis = false, y = {}, formatValue = null, fill = true, timeline = true } = {}) {
+            const base = baseChartOptions()
+            const chart = new Chart(canvas, {
+                type: 'line',
+                data: {
+                    labels: labels ?? data.map((_, i) => i),
+                    datasets: [{
+                        label,
+                        data,
+                        borderColor: color,
+                        backgroundColor: color + '33',
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill,
+                        tension: 0.3,
+                        spanGaps: true,
+                    }],
+                },
+                plugins: [crosshairPlugin],
+                options: {
+                    responsive: true,
+                    animation: false,
+                    interaction: { mode: 'index', intersect: false },
+                    onHover: timeline
+                        ? (_, elements) => {
+                            if (elements.length) this.$emit('hover', this.sampleIdx[elements[0].index])
+                        }
+                        : undefined,
+                    plugins: {
+                        tooltip: {
+                            ...base.tooltip,
+                            mode: 'index',
+                            intersect: false,
+                            callbacks: formatValue ? { label: ctx => `${label}: ${formatValue(ctx.parsed.y)}` } : {},
+                        },
+                        legend: { display: false },
+                    },
+                    scales: {
+                        x: {
+                            display: showXAxis,
+                            ticks: { ...base.ticks, maxTicksLimit: 10 },
+                            grid: base.grid,
+                            border: { color: base.grid.color },
+                        },
+                        y: {
+                            ...y,
+                            ticks: { ...base.ticks, ...(formatValue ? { callback: formatValue } : {}) },
+                            grid: base.grid,
+                            border: { color: base.grid.color },
+                        },
+                    },
+                },
+            })
+            chart.$timeline = timeline
+            chart.$crosshairColor = base.theme.text
+            this.charts.push(chart)
+            return chart
+        },
         // Returns cumulative distance in km for each trackpoint index.
         cumulativeKm() {
             const tps = this.trackpoints
@@ -222,56 +285,59 @@ export default {
             if (hasDistField) {
                 return tps.map(tp => tp.distance !== null ? tp.distance * this.distScale : null)
             }
-            // Fallback: integrate speed (m/s) × Δt (s) → km
+            // Fallback: integrate speed (km/h) × Δt (s) → km
             const result = [0]
             let cum = 0
             for (let i = 1; i < tps.length; i++) {
                 const prev = tps[i - 1]
                 const curr = tps[i]
                 if (curr.speed !== null && prev.timestamp && curr.timestamp) {
-                    const dt = (new Date(curr.timestamp.replace(' ', 'T')) - new Date(prev.timestamp.replace(' ', 'T'))) / 1000
-                    if (dt > 0 && dt < 60) cum += curr.speed * dt / 1000
+                    const dt = (parseDate(curr.timestamp) - parseDate(prev.timestamp)) / 1000
+                    if (dt > 0 && dt < 60) cum += curr.speed * dt / 3600
                 }
                 result.push(cum)
             }
             return result
         },
-        buildKmBuckets(fieldOrValues, transform) {
+        // Average of values per full km (or mile)
+        buildUnitBuckets(values) {
             const distances = this.cumulativeKm()
-            const values = Array.isArray(fieldOrValues) ? fieldOrValues : this.trackpoints.map(tp => tp[fieldOrValues])
+            const unit = splitKm()
             const buckets = {}
             for (let i = 0; i < this.trackpoints.length; i++) {
                 const km = distances[i]
                 const v = values[i]
                 if (km === null || v === null) continue
-                const bucket = Math.floor(km)
+                const bucket = Math.floor(km / unit)
                 if (!buckets[bucket]) buckets[bucket] = []
-                buckets[bucket].push(transform(v))
+                buckets[bucket].push(v)
             }
             const keys = Object.keys(buckets).map(Number).sort((a, b) => a - b)
             if (keys.length < 2) return null  // not enough distance data
             return {
-                labels: keys.map(k => t('fit_tracker', '{km} km', { km: k })),
+                labels: keys.map(k => `${k} ${distanceUnit()}`),
                 data: keys.map(k => {
                     const vals = buckets[k]
-                    return parseFloat((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1))
+                    return parseFloat(speedValue(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1))
                 }),
             }
         },
         buildCharts() {
             const labels = this.sampledLabels
-            if (this.hasHR)    buildChart(this.$refs.hrCanvas,    t('fit_tracker', 'Heart rate'), this.hrData,    '#ef4444', labels)
-            if (this.hasAlt)   buildChart(this.$refs.altCanvas,   t('fit_tracker', 'Elevation'), this.altData,   '#22c55e', labels)
+            if (this.hasHR)    this.buildChart(this.$refs.hrCanvas,    t('fit_tracker', 'Heart rate'), this.hrData,    '#ef4444', labels)
+            if (this.hasAlt)   this.buildChart(this.$refs.altCanvas,   t('fit_tracker', 'Elevation'), this.altData,   '#22c55e', labels)
             if (this.hasSpeed) {
                 // Pace: faster is better, so reverse the axis (like Garmin/Strava) and show m:ss
-                const paceOpts = this.isPace ? { y: { reverse: true, min: 0 }, formatValue: formatPaceAxis, fill: 'end' } : {}
-                buildChart(this.$refs.speedCanvas, this.speedLabel, this.speedData, '#0082c9', labels, paceOpts)
+                const paceOpts = this.isPace ? { y: { reverse: true, min: 0 }, formatValue: formatMinutes, fill: 'end' } : {}
+                this.buildChart(this.$refs.speedCanvas, this.speedLabel, this.speedData, '#0082c9', labels, paceOpts)
             }
-            if (this.hasPower) buildChart(this.$refs.powerCanvas, t('fit_tracker', 'Power'), this.powerData, '#f97316', labels)
+            if (this.hasPower) this.buildChart(this.$refs.powerCanvas, t('fit_tracker', 'Power'), this.powerData, '#f97316', labels)
 
-            if (this.showSpeedKm && this.$refs.cyclingSpeedCanvas) {
-                const result = this.buildKmBuckets(this.resolvedSpeed, v => parseFloat(v.toFixed(1)))
-                if (result) buildChart(this.$refs.cyclingSpeedCanvas, t('fit_tracker', 'Speed'), result.data, '#0082c9', result.labels, { showXAxis: true })
+            if (this.showSpeedPerUnit && this.$refs.cyclingSpeedCanvas) {
+                const result = this.buildUnitBuckets(this.resolvedSpeed)
+                if (result) {
+                    this.buildChart(this.$refs.cyclingSpeedCanvas, t('fit_tracker', 'Speed'), result.data, '#0082c9', result.labels, { showXAxis: true, timeline: false })
+                }
             }
         },
     },

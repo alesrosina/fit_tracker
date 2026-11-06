@@ -1,42 +1,116 @@
 <template>
     <div class="activity-map-section">
-        <h3>{{ t('fit_tracker', 'Route') }}</h3>
+        <div class="map-header">
+            <h3>{{ t('fit_tracker', 'Route') }}</h3>
+            <NcSelect
+                v-if="colorOptions.length > 1"
+                v-model="colorOption"
+                class="map-header__color"
+                :options="colorOptions"
+                :input-label="t('fit_tracker', 'Colour route by')"
+                :clearable="false"
+                label="label"
+            />
+        </div>
         <div ref="mapEl" class="map-container"></div>
+        <div v-if="legend" class="map-legend" aria-hidden="true">
+            <span>{{ legend.min }}</span>
+            <span class="map-legend__bar" :style="{ background: legendGradient }" />
+            <span>{{ legend.max }}</span>
+        </div>
     </div>
 </template>
 
 <script>
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { generateUrl } from '@nextcloud/router'
 import { t } from '@nextcloud/l10n'
-import { icons } from '../icons.js'
-import { formatTime } from '../format.js'
+import { NcSelect } from '@nextcloud/vue'
+import { formatSpeed, formatElevation } from '../format.js'
+import { createPhotoLayer } from '../photoMarkers.js'
 
-// Icon markup for Leaflet's divIcon (rendered outside Vue)
-const cameraSvg = icons.photo_camera
-    .replace(/width="\d+"/, 'width="18"')
-    .replace(/height="\d+"/, 'height="18"')
-    .replace('<svg ', '<svg fill="currentColor" aria-hidden="true" ')
-const escapeHtml = str => String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+// Slow/low → fast/high
+const ROUTE_COLORS = ['#3b82f6', '#06b6d4', '#22c55e', '#84cc16', '#eab308', '#f97316', '#ef4444']
+
+function percentile(sorted, p) {
+    return sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))))]
+}
+
+// Centered moving average ignoring nulls, so GPS speed jitter doesn't make the route flicker
+function smooth(arr, radius) {
+    return arr.map((v, i) => {
+        if (v === null) return null
+        let sum = 0, n = 0
+        for (let j = Math.max(0, i - radius); j <= Math.min(arr.length - 1, i + radius); j++) {
+            if (arr[j] !== null) { sum += arr[j]; n++ }
+        }
+        return sum / n
+    })
+}
 
 export default {
     name: 'ActivityMap',
+    components: { NcSelect },
     props: {
         trackpoints: { type: Array, required: true },
         photos:      { type: Array, default: () => [] },
+        // Trackpoint index to mark on the route (hovered in a chart)
+        highlightIndex: { type: Number, default: null },
     },
+    emits: ['hover'],
     data() {
-        return { map: null }
+        return { map: null, colorOption: null, legend: null }
     },
-    watch: {
-        photos(newPhotos) {
-            if (this.map && newPhotos.length > 0) {
-                this.addPhotoMarkers(newPhotos)
-            }
+    computed: {
+        // Trackpoint indices with a position
+        gpsIndices() {
+            const out = []
+            this.trackpoints.forEach((tp, i) => { if (tp.lat !== null && tp.lon !== null) out.push(i) })
+            return out
+        },
+        colorOptions() {
+            const has = key => this.gpsIndices.some(i => this.trackpoints[i][key] !== null)
+            const options = [{ value: 'none', label: t('fit_tracker', 'Single colour') }]
+            if (has('speed')) options.push({ value: 'speed', label: t('fit_tracker', 'Speed') })
+            if (has('heartRate')) options.push({ value: 'heartRate', label: t('fit_tracker', 'Heart rate') })
+            if (has('altitude')) options.push({ value: 'altitude', label: t('fit_tracker', 'Elevation') })
+            return options
+        },
+        legendGradient() {
+            return `linear-gradient(to right, ${ROUTE_COLORS.join(', ')})`
         },
     },
+    watch: {
+        colorOption() {
+            if (this.map) this.drawRoute()
+        },
+        highlightIndex(index) {
+            if (!this.map) return
+            const tp = index === null ? null : this.trackpoints[index]
+            if (!tp || tp.lat === null || tp.lon === null) {
+                this.hoverMarker?.remove()
+                return
+            }
+            if (!this.hoverMarker) {
+                this.hoverMarker = L.circleMarker([tp.lat, tp.lon], {
+                    radius: 7, color: '#fff', weight: 2, fillColor: '#0082c9', fillOpacity: 1, interactive: false,
+                })
+            }
+            this.hoverMarker.setLatLng([tp.lat, tp.lon])
+            if (!this.map.hasLayer(this.hoverMarker)) this.hoverMarker.addTo(this.map)
+        },
+        photos(newPhotos) {
+            this.photoLayer?.setPhotos(newPhotos)
+        },
+    },
+    created() {
+        // Leaflet layers stay out of data(): they must not become reactive proxies
+        this.routeLayer = null
+        this.hoverMarker = null
+        this.photoLayer = null
+    },
     mounted() {
+        this.colorOption = this.colorOptions[0]
         this.$nextTick(() => this.initMap())
     },
     beforeUnmount() {
@@ -60,13 +134,8 @@ export default {
                 referrerPolicy: 'strict-origin-when-cross-origin',
             }).addTo(this.map)
 
-            const polyline = L.polyline(coords, {
-                color: '#0082c9',
-                weight: 3,
-                opacity: 0.85,
-            }).addTo(this.map)
-
-            this.map.fitBounds(polyline.getBounds(), { padding: [20, 20] })
+            this.map.fitBounds(L.latLngBounds(coords), { padding: [20, 20] })
+            this.drawRoute()
 
             // Start marker
             L.circleMarker(coords[0], {
@@ -78,9 +147,76 @@ export default {
                 radius: 8, color: '#ef4444', fillColor: '#ef4444', fillOpacity: 1,
             }).bindTooltip(t('fit_tracker', 'Finish')).addTo(this.map)
 
-            if (this.photos.length > 0) {
-                this.addPhotoMarkers(this.photos)
+            // Thumbnails open the activity page's photo viewer
+            this.photoLayer = createPhotoLayer(this.map, {
+                onOpen: (cluster, index) => document.dispatchEvent(new CustomEvent('fit-photo-open', {
+                    detail: { fileId: cluster[index].fileId, name: cluster[index].name },
+                })),
+            })
+            this.photoLayer.setPhotos(this.photos)
+        },
+        // The route as one line, or as runs of coloured segments by speed/HR/elevation
+        drawRoute() {
+            this.routeLayer?.remove()
+            const tps = this.trackpoints
+            const idx = this.gpsIndices
+            const mode = this.colorOption?.value ?? 'none'
+            const group = L.featureGroup()
+
+            if (mode === 'none') {
+                L.polyline(idx.map(i => [tps[i].lat, tps[i].lon]), { color: '#0082c9', weight: 3, opacity: 0.85 }).addTo(group)
+                this.legend = null
+            } else {
+                let values = idx.map(i => tps[i][mode])
+                if (mode === 'speed') values = smooth(values, 5)
+                const sorted = values.filter(v => v !== null).sort((a, b) => a - b)
+                // 5th–95th percentile, so a few outliers don't wash out the colours
+                const min = percentile(sorted, 0.05)
+                const max = percentile(sorted, 0.95)
+                const bucket = v => v === null ? null
+                    : Math.round(Math.min(1, Math.max(0, (v - min) / ((max - min) || 1))) * (ROUTE_COLORS.length - 1))
+                let run = [[tps[idx[0]].lat, tps[idx[0]].lon]]
+                let runBucket = bucket(values[0])
+                const flush = () => {
+                    if (run.length > 1) {
+                        L.polyline(run, { color: runBucket === null ? '#94a3b8' : ROUTE_COLORS[runBucket], weight: 4, opacity: 0.9 }).addTo(group)
+                    }
+                }
+                for (let k = 1; k < idx.length; k++) {
+                    const point = [tps[idx[k]].lat, tps[idx[k]].lon]
+                    const b = bucket(values[k])
+                    run.push(point)
+                    if (b !== runBucket) {
+                        flush()
+                        run = [point]
+                        runBucket = b
+                    }
+                }
+                flush()
+                const fmt = {
+                    speed: v => formatSpeed(v),
+                    heartRate: v => t('fit_tracker', '{bpm} bpm', { bpm: Math.round(v) }),
+                    altitude: v => formatElevation(v),
+                }[mode]
+                this.legend = sorted.length ? { min: fmt(min), max: fmt(max) } : null
             }
+
+            // Hovering the route marks the same moment in the charts
+            group.on('mousemove', e => this.$emit('hover', this.nearestTrackpoint(e.latlng)))
+            group.on('mouseout', () => this.$emit('hover', null))
+            group.addTo(this.map)
+            group.bringToBack()
+            this.routeLayer = group
+        },
+        nearestTrackpoint(latlng) {
+            let best = null
+            let bestDist = Infinity
+            for (const i of this.gpsIndices) {
+                const tp = this.trackpoints[i]
+                const d = (tp.lat - latlng.lat) ** 2 + (tp.lon - latlng.lng) ** 2
+                if (d < bestDist) { bestDist = d; best = i }
+            }
+            return best
         },
         setupCtrlScrollZoom() {
             this.onCtrlZoomKeyDown = (e) => {
@@ -98,122 +234,6 @@ export default {
                 this.map.scrollWheelZoom.enable()
             }, { passive: false })
         },
-        addPhotoMarkers(photos) {
-            const clusters = this.clusterPhotos(photos, 50)
-
-            for (const cluster of clusters) {
-                const lat = cluster.reduce((sum, p) => sum + p.lat, 0) / cluster.length
-                const lon = cluster.reduce((sum, p) => sum + p.lon, 0) / cluster.length
-
-                const count = cluster.length
-                const icon = L.divIcon({
-                    html: count > 1
-                        ? `<div class="photo-pin photo-pin--multi">${cameraSvg}<span class="photo-pin__count">${count}</span></div>`
-                        : `<div class="photo-pin">${cameraSvg}</div>`,
-                    className: '',
-                    iconSize: [32, 32],
-                    iconAnchor: [16, 16],
-                    popupAnchor: [0, -18],
-                })
-
-                const photoData = cluster.map(photo => ({
-                    fileId: photo.fileId,
-                    name: photo.name || '',
-                    thumbUrl: generateUrl(`/core/preview?fileId=${photo.fileId}&x=160&y=160&a=1`),
-                    time: photo.takenAt ? formatTime(photo.takenAt) : '',
-                }))
-
-                const first   = photoData[0]
-                const multi   = count > 1
-
-                const popupHtml = `
-                    <div class="photo-popup">
-                        <div class="photo-carousel">
-                            <img class="photo-carousel__img" src="${first.thumbUrl}" width="160" height="160" alt="${escapeHtml(first.name)}" title="${escapeHtml(t('fit_tracker', 'Open photo'))}" tabindex="0" role="button">
-                            ${multi ? `
-                            <button class="photo-carousel__btn photo-carousel__btn--prev" style="display:none" aria-label="${escapeHtml(t('fit_tracker', 'Previous photo'))}">${icons.chevron_left}</button>
-                            <button class="photo-carousel__btn photo-carousel__btn--next" aria-label="${escapeHtml(t('fit_tracker', 'Next photo'))}">${icons.chevron_right}</button>
-                            ` : ''}
-                        </div>
-                        <div class="photo-carousel__footer">
-                            <span class="photo-carousel__time">${first.time}</span>
-                            ${multi ? `<span class="photo-carousel__counter">1 / ${count}</span>` : ''}
-                        </div>
-                    </div>`
-
-                const marker = L.marker([lat, lon], { icon })
-                    .bindPopup(popupHtml, { maxWidth: 200 })
-                    .addTo(this.map)
-
-                marker.on('popupopen', () => {
-                    const el        = marker.getPopup().getElement()
-                    const img       = el.querySelector('.photo-carousel__img')
-                    const prevBtn   = el.querySelector('.photo-carousel__btn--prev')
-                    const nextBtn   = el.querySelector('.photo-carousel__btn--next')
-                    const counterEl = el.querySelector('.photo-carousel__counter')
-                    const timeEl    = el.querySelector('.photo-carousel__time')
-                    let idx = 0
-
-                    const refresh = () => {
-                        const p = photoData[idx]
-                        img.src = p.thumbUrl
-                        img.alt = p.name
-                        if (timeEl)    timeEl.textContent    = p.time
-                        if (counterEl) counterEl.textContent = `${idx + 1} / ${photoData.length}`
-                        if (prevBtn)   prevBtn.style.display = idx === 0 ? 'none' : 'flex'
-                        if (nextBtn)   nextBtn.style.display = idx === photoData.length - 1 ? 'none' : 'flex'
-                    }
-
-                    const openPhoto = () => {
-                        document.dispatchEvent(new CustomEvent('fit-photo-open', {
-                            detail: { fileId: photoData[idx].fileId, name: photoData[idx].name },
-                        }))
-                    }
-                    img.addEventListener('click', openPhoto)
-                    img.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPhoto() }
-                    })
-
-                    if (prevBtn) {
-                        prevBtn.addEventListener('click', (e) => {
-                            e.stopPropagation()
-                            if (idx > 0) { idx--; refresh() }
-                        })
-                    }
-                    if (nextBtn) {
-                        nextBtn.addEventListener('click', (e) => {
-                            e.stopPropagation()
-                            if (idx < photoData.length - 1) { idx++; refresh() }
-                        })
-                    }
-                })
-            }
-        },
-        clusterPhotos(photos, thresholdMeters) {
-            const clusters = []
-            const used = new Set()
-            for (let i = 0; i < photos.length; i++) {
-                if (used.has(i)) continue
-                const cluster = [photos[i]]
-                used.add(i)
-                for (let j = i + 1; j < photos.length; j++) {
-                    if (used.has(j)) continue
-                    if (this.haversineJs(photos[i].lat, photos[i].lon, photos[j].lat, photos[j].lon) <= thresholdMeters) {
-                        cluster.push(photos[j])
-                        used.add(j)
-                    }
-                }
-                clusters.push(cluster)
-            }
-            return clusters
-        },
-        haversineJs(lat1, lon1, lat2, lon2) {
-            const R = 6371000
-            const dLat = (lat2 - lat1) * Math.PI / 180
-            const dLon = (lon2 - lon1) * Math.PI / 180
-            const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
-            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-        },
     },
 }
 </script>
@@ -222,6 +242,33 @@ export default {
 .activity-map-section {
     margin-bottom: var(--ft-gap-6);
 }
+.map-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--ft-gap-2);
+    margin-bottom: var(--ft-gap-2);
+}
+.map-header h3 {
+    margin: 0;
+}
+.map-header__color {
+    min-width: 200px;
+}
+.map-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--ft-gap-2);
+    margin-top: var(--ft-gap-2);
+    font-size: var(--font-size-small);
+    color: var(--color-text-maxcontrast);
+}
+.map-legend__bar {
+    flex: 0 1 200px;
+    height: 8px;
+    border-radius: var(--border-radius-pill);
+}
 .map-container {
     height: 400px;
     width: 100%;
@@ -229,101 +276,4 @@ export default {
     overflow: hidden;
     border: 1px solid var(--color-border);
 }
-</style>
-
-<!-- Non-scoped: Leaflet injects popup/marker HTML outside the Vue component -->
-<style>
-.activity-map-section .leaflet-popup-content-wrapper,
-.activity-map-section .leaflet-popup-tip {
-    background: var(--color-main-background);
-    color: var(--color-main-text);
-}
-.photo-pin {
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--border-radius-pill);
-    background: var(--color-primary-element);
-    color: var(--color-primary-element-text);
-    border: 2px solid var(--color-main-background);
-    box-shadow: 0 0 4px var(--color-box-shadow);
-    cursor: pointer;
-    user-select: none;
-    position: relative;
-    box-sizing: border-box;
-}
-.photo-pin__count {
-    position: absolute;
-    top: -6px;
-    right: -8px;
-    background: var(--color-main-background);
-    color: var(--color-main-text);
-    border: 1px solid var(--color-border-maxcontrast);
-    font-size: var(--font-size-small);
-    font-weight: bold;
-    border-radius: var(--border-radius-pill);
-    padding: 0 var(--ft-gap-1);
-    line-height: 16px;
-    min-width: 16px;
-    text-align: center;
-}
-.photo-popup {
-    font-size: var(--font-size-small);
-    width: 160px;
-}
-.photo-carousel {
-    position: relative;
-    width: 160px;
-    height: 160px;
-}
-.photo-carousel__img {
-    width: 160px;
-    height: 160px;
-    object-fit: cover;
-    border-radius: var(--border-radius-small);
-    display: block;
-    cursor: pointer;
-}
-.photo-carousel__img:focus-visible {
-    outline: 2px solid var(--color-primary-element);
-    outline-offset: 2px;
-}
-/* Overlaid on the photo, so a fixed dark scrim keeps the icon legible */
-.photo-carousel__btn {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    width: var(--default-clickable-area);
-    height: var(--default-clickable-area);
-    min-height: 0;
-    margin: 0;
-    padding: 0;
-    border: none;
-    border-radius: var(--border-radius-pill);
-    background-color: rgba(0, 0, 0, 0.5);
-    color: #fff;
-    fill: currentColor;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.photo-carousel__btn svg {
-    width: 20px;
-    height: 20px;
-}
-.photo-carousel__btn:hover,
-.photo-carousel__btn:focus-visible { background-color: rgba(0, 0, 0, 0.7); }
-.photo-carousel__btn--prev { left: var(--ft-gap-1); }
-.photo-carousel__btn--next { right: var(--ft-gap-1); }
-.photo-carousel__footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-top: var(--ft-gap-1);
-    color: var(--color-text-maxcontrast);
-}
-.photo-carousel__counter { font-weight: bold; }
 </style>

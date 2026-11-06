@@ -26,7 +26,7 @@ import { NcModal, NcButton, NcIconSvgWrapper } from '@nextcloud/vue'
 import { t } from '@nextcloud/l10n'
 import { sportIcon, sportLabel, sportColor, SPEED_NOT_PACE_SPORTS } from '../sports.js'
 import { icons, iconImage } from '../icons.js'
-import { formatDistance, formatDurationClock, formatPace, formatSpeed } from '../format.js'
+import { formatDistance, formatDurationClock, formatElevation, formatPace, formatSpeed, parseDate } from '../format.js'
 
 const CANVAS_W = 1080
 const CANVAS_H = 1920
@@ -299,7 +299,7 @@ export default {
             if (a.duration) stats.push({ label: t('fit_tracker', 'Duration'), value: formatDurationClock(a.duration) })
             const paceOrSpeed = this.paceOrSpeed()
             if (paceOrSpeed) stats.push({ label: SPEED_NOT_PACE_SPORTS.includes(a.sport) ? t('fit_tracker', 'Speed') : t('fit_tracker', 'Pace'), value: paceOrSpeed })
-            if (a.elevationGain) stats.push({ label: t('fit_tracker', 'Elevation'), value: t('fit_tracker', '+{meters} m', { meters: Math.round(a.elevationGain) }) })
+            if (a.elevationGain) stats.push({ label: t('fit_tracker', 'Elevation'), value: formatElevation(a.elevationGain, true) })
             if (a.avgHr) stats.push({ label: t('fit_tracker', 'Heart rate'), value: t('fit_tracker', '{bpm} bpm', { bpm: a.avgHr }) })
             return stats.slice(0, 3).map(st => ({ ...st, label: st.label.toLocaleUpperCase() }))
         },
@@ -331,7 +331,7 @@ export default {
         },
         formatDate(raw) {
             if (!raw) return ''
-            return new Date(raw).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+            return parseDate(raw).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
         },
         filename() {
             return `${this.activity.sport || 'activity'}-${this.activity.startTime?.slice(0, 10) || ''}.png`

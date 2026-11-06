@@ -1,8 +1,8 @@
 <template>
     <div class="activity-detail">
         <DetailToolbar
-            :back-to="'/'"
-            :back-label="t('fit_tracker', 'All activities')"
+            :back-to="backRoute"
+            :back-label="t('fit_tracker', 'Overview')"
             :show-actions="!!activity"
             :delete-label="t('fit_tracker', 'Delete activity')"
             :delete-title="t('fit_tracker', 'Delete activity and move its file to the trash?')"
@@ -11,12 +11,29 @@
             @delete="deleteActivity"
             @reimport="reimport"
         >
-            <NcButton variant="primary" @click="showShare = true">
+            <NcButton @click="showEdit = true">
+                <template #icon>
+                    <NcIconSvgWrapper :svg="icons.edit" :size="20" />
+                </template>
+                {{ t('fit_tracker', 'Edit') }}
+            </NcButton>
+            <NcActions :aria-label="t('fit_tracker', 'Share')" variant="primary" :menu-name="t('fit_tracker', 'Share')">
                 <template #icon>
                     <NcIconSvgWrapper :svg="icons.share" :size="20" />
                 </template>
-                {{ t('fit_tracker', 'Share') }}
-            </NcButton>
+                <NcActionButton close-after-click @click="showShare = true">
+                    <template #icon>
+                        <NcIconSvgWrapper :svg="icons.photo_camera" :size="20" />
+                    </template>
+                    {{ t('fit_tracker', 'Share as image') }}
+                </NcActionButton>
+                <NcActionButton close-after-click @click="showPublicLink = true">
+                    <template #icon>
+                        <NcIconSvgWrapper :svg="icons.link" :size="20" />
+                    </template>
+                    {{ t('fit_tracker', 'Public link') }}
+                </NcActionButton>
+            </NcActions>
         </DetailToolbar>
 
         <LoadingSkeleton v-if="loading" variant="detail" />
@@ -41,9 +58,20 @@
                 <SportBadge :icon="sportIcon" :color="sportColor" :size="32" />
                 <div>
                     <h2>{{ activity.name }}</h2>
-                    <div class="subtitle">{{ formatDateTime(activity.startTime) }}</div>
+                    <div class="subtitle">
+                        <span>{{ formatDateTime(activity.startTime) }}</span>
+                        <span v-if="gearName" class="subtitle__item">
+                            <NcIconSvgWrapper :svg="icons.steps" :size="16" />
+                            {{ gearName }}
+                        </span>
+                        <span v-if="activity.rpe" class="subtitle__item" :title="t('fit_tracker', 'Perceived effort')">
+                            {{ t('fit_tracker', 'Effort {rpe}/10 · {label}', { rpe: activity.rpe, label: rpeLabel(activity.rpe) }) }}
+                        </span>
+                    </div>
                 </div>
             </div>
+
+            <p v-if="activity.notes" class="notes">{{ activity.notes }}</p>
 
             <!-- Key stats -->
             <div class="stats-grid">
@@ -53,11 +81,15 @@
                 </div>
             </div>
 
+            <WeatherStrip v-if="settings.weather_enabled && hasGps" :key="'weather-' + id" :activity-id="id" />
+
             <!-- Map -->
             <ActivityMap
                 v-if="hasGps"
                 :trackpoints="trackpoints"
                 :photos="sortedPhotos"
+                :highlight-index="hoverIndex"
+                @hover="hoverIndex = $event"
             />
             <!-- Photos (GPS-tagged images matched to the route, any sport) -->
             <ActivityPhotos
@@ -71,12 +103,34 @@
                 v-if="trackpoints.length > 0"
                 :trackpoints="trackpoints"
                 :sport="activity.sport"
+                :highlight-index="hoverIndex"
+                @hover="hoverIndex = $event"
+            />
+
+            <HrZones
+                v-if="activity.analysis?.hr && activity.hrSettings"
+                :histogram="activity.analysis.hr"
+                :settings="activity.hrSettings"
+            />
+
+            <PowerAnalysis
+                v-if="activity.analysis?.power"
+                :analysis="activity.analysis"
+                :avg-power="activity.avgPower"
+                :duration="activity.duration"
+                :ftp="settings.ftp"
+            />
+
+            <SplitsTable
+                v-if="activity.distance && trackpoints.length > 0"
+                :trackpoints="trackpoints"
+                :sport="activity.sport"
             />
 
             <!-- Laps table -->
-            <section v-if="laps.length > 0">
+            <section v-if="laps.length > 1">
                 <h3>{{ t('fit_tracker', 'Laps') }}</h3>
-                <table class="laps-table">
+                <table class="ft-table">
                     <thead>
                         <tr>
                             <th>#</th>
@@ -90,7 +144,7 @@
                             <td :data-label="lapColumns[1]">{{ lap.duration ? formatDurationClock(lap.duration) : '–' }}</td>
                             <td :data-label="lapColumns[2]">{{ lapPaceOrSpeed(lap) }}</td>
                             <td :data-label="lapColumns[3]">{{ lap.avgHr ? t('fit_tracker', '{bpm} bpm', { bpm: lap.avgHr }) : '–' }}</td>
-                            <td :data-label="lapColumns[4]">{{ lap.elevationGain ? t('fit_tracker', '+{meters} m', { meters: Math.round(lap.elevationGain) }) : '–' }}</td>
+                            <td :data-label="lapColumns[4]">{{ lap.elevationGain ? formatElevation(lap.elevationGain, true) : '–' }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -111,6 +165,19 @@
             :trackpoints="trackpoints"
             @close="showShare = false"
         />
+
+        <EditActivityDialog
+            v-if="showEdit"
+            :activity="activity"
+            @saved="onSaved"
+            @close="showEdit = false"
+        />
+
+        <PublicLinkDialog
+            v-if="showPublicLink"
+            :activity-id="id"
+            @close="showPublicLink = false"
+        />
     </div>
 </template>
 
@@ -119,21 +186,30 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { defineAsyncComponent } from 'vue'
 import { t } from '@nextcloud/l10n'
-import { NcButton, NcEmptyContent, NcIconSvgWrapper } from '@nextcloud/vue'
+import { NcActionButton, NcActions, NcButton, NcEmptyContent, NcIconSvgWrapper } from '@nextcloud/vue'
 import DetailToolbar from './DetailToolbar.vue'
 import LoadingSkeleton from './LoadingSkeleton.vue'
 import LoadError from './LoadError.vue'
 import SportBadge from './SportBadge.vue'
-import { sportIcon as getSportIcon, sportColor as getSportColor, SPEED_NOT_PACE_SPORTS } from '../sports.js'
+import { sportIcon as getSportIcon, sportColor as getSportColor, rpeLabel, SPEED_NOT_PACE_SPORTS } from '../sports.js'
 import { icons } from '../icons.js'
-import { formatDistance, formatDurationClock, formatDateTime, formatPace, formatSpeed } from '../format.js'
+import { formatDistance, formatDurationClock, formatDateTime, formatElevation, formatPace, formatSpeed } from '../format.js'
 import { deleteItem, reimportItem, fileName } from '../fileActions.js'
+import { settings } from '../store/settings.js'
+import { updateActivity } from '../store/navData.js'
+import { dashboardRoute } from '../timeframe.js'
 
 export default {
     name: 'ActivityDetail',
     components: {
         DetailToolbar, LoadingSkeleton, LoadError, SportBadge,
-        NcButton, NcEmptyContent, NcIconSvgWrapper,
+        NcActionButton, NcActions, NcButton, NcEmptyContent, NcIconSvgWrapper,
+        EditActivityDialog: defineAsyncComponent(() => import('./EditActivityDialog.vue')),
+        PublicLinkDialog: defineAsyncComponent(() => import('./PublicLinkDialog.vue')),
+        HrZones:        defineAsyncComponent(() => import('./HrZones.vue')),
+        PowerAnalysis:  defineAsyncComponent(() => import('./PowerAnalysis.vue')),
+        SplitsTable:    defineAsyncComponent(() => import('./SplitsTable.vue')),
+        WeatherStrip:   defineAsyncComponent(() => import('./WeatherStrip.vue')),
         ActivityMap:    defineAsyncComponent(() => import('./ActivityMap.vue')),
         ActivityCharts: defineAsyncComponent(() => import('./ActivityCharts.vue')),
         ActivityPhotos: defineAsyncComponent(() => import('./ActivityPhotos.vue')),
@@ -154,9 +230,18 @@ export default {
             busy: null, // 'reimport' | 'delete' while running
             lightboxIndex: null,
             showShare: false,
+            showEdit: false,
+            showPublicLink: false,
+            hoverIndex: null,
+            gears: [],
+            settings,
         }
     },
     computed: {
+        // Back to the dashboard with the timeframe and sport it was opened from
+        backRoute() {
+            return dashboardRoute()
+        },
         busyLabel() {
             if (this.busy === 'reimport') return t('fit_tracker', 'Re-importing…')
             if (this.busy === 'delete') return t('fit_tracker', 'Deleting…')
@@ -171,6 +256,10 @@ export default {
         },
         sportIcon() {
             return getSportIcon(this.activity?.sport)
+        },
+        gearName() {
+            const id = this.activity?.gearId
+            return id ? this.gears.find(g => g.id === id)?.name ?? null : null
         },
         sportColor() {
             return getSportColor(this.activity?.sport)
@@ -196,7 +285,7 @@ export default {
             add(a.avgHr, t('fit_tracker', 'Average heart rate'), () => t('fit_tracker', '{bpm} bpm', { bpm: a.avgHr }))
             add(a.maxHr, t('fit_tracker', 'Maximum heart rate'), () => t('fit_tracker', '{bpm} bpm', { bpm: a.maxHr }))
             add(a.calories, t('fit_tracker', 'Calories'), () => t('fit_tracker', '{kcal} kcal', { kcal: a.calories }))
-            add(a.elevationGain, t('fit_tracker', 'Elevation gain'), () => t('fit_tracker', '+{meters} m', { meters: Math.round(a.elevationGain) }))
+            add(a.elevationGain, t('fit_tracker', 'Elevation gain'), () => formatElevation(a.elevationGain, true))
             add(a.avgCadence, t('fit_tracker', 'Average cadence'), () => t('fit_tracker', '{rpm} rpm', { rpm: a.avgCadence }))
             add(a.avgPower, t('fit_tracker', 'Average power'), () => t('fit_tracker', '{watts} W', { watts: a.avgPower }))
             return list
@@ -272,6 +361,9 @@ export default {
                 if (this.hasGps) {
                     this.loadPhotos()
                 }
+                if (this.activity.gearId) {
+                    this.loadGear()
+                }
             } catch (e) {
                 if (e.response?.status === 404) this.notFound = true
                 else this.error = true
@@ -286,6 +378,21 @@ export default {
             const index = this.sortedPhotos.findIndex(p => p.fileId === fileId)
             if (index !== -1) this.lightboxIndex = index
         },
+        async loadGear() {
+            try {
+                const { data } = await axios.get(generateUrl('/apps/fit_tracker/api/gear'))
+                this.gears = data
+            } catch {
+                // Only used for the gear name in the header
+            }
+        },
+        onSaved(updated) {
+            // Keep what the list endpoint doesn't return
+            this.activity = { ...this.activity, ...updated }
+            const { analysis, hrSettings, ...listFields } = updated
+            updateActivity(listFields)
+            if (updated.gearId) this.loadGear()
+        },
         async loadPhotos() {
             try {
                 const res = await axios.get(generateUrl(`/apps/fit_tracker/api/activities/${this.id}/photos`))
@@ -298,7 +405,7 @@ export default {
             this.busy = 'delete'
             const deleted = await deleteItem('activities', this.id, this.activity?.fitFilePath)
             this.busy = null
-            if (deleted) this.$router.push('/')
+            if (deleted) this.$router.push(this.backRoute)
         },
         async reimport() {
             // The content is about to be replaced: show the skeleton meanwhile
@@ -310,6 +417,8 @@ export default {
         },
         formatDateTime,
         formatDistance,
+        formatElevation,
+        rpeLabel,
         formatDurationClock,
         lapPaceOrSpeed(lap) {
             let speed = lap.avgSpeed || null  // km/h
@@ -364,43 +473,22 @@ export default {
     font-size: 20px;
     font-weight: bold;
 }
-.laps-table {
-    width: 100%;
-    border-collapse: collapse;
+.subtitle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ft-gap-1) var(--ft-gap-3);
 }
-.laps-table th, .laps-table td {
-    padding: var(--ft-gap-2) var(--ft-gap-3);
-    text-align: start;
-    border-bottom: 1px solid var(--color-border);
+.subtitle__item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ft-gap-1);
 }
-.laps-table th {
-    font-size: var(--font-size-small);
-    font-weight: bold;
-    color: var(--color-text-maxcontrast);
-}
-@media (max-width: 600px) {
-    .laps-table thead { display: none; }
-    .laps-table, .laps-table tbody, .laps-table tr, .laps-table td {
-        display: block;
-        width: 100%;
-    }
-    .laps-table tr {
-        border: 1px solid var(--color-border);
-        border-radius: var(--border-radius-element);
-        margin-bottom: var(--ft-gap-2);
-        padding: var(--ft-gap-1) var(--ft-gap-3);
-    }
-    .laps-table td {
-        display: flex;
-        justify-content: space-between;
-        padding: var(--ft-gap-1) 0;
-        border-bottom: none;
-    }
-    .laps-table td::before {
-        content: attr(data-label);
-        font-weight: bold;
-        color: var(--color-text-maxcontrast);
-        margin-inline-end: var(--ft-gap-3);
-    }
+.notes {
+    white-space: pre-wrap;
+    margin: calc(-1 * var(--ft-gap-3)) 0 var(--ft-gap-6);
+    padding: var(--ft-gap-3) var(--ft-gap-4);
+    border-inline-start: 3px solid var(--color-primary-element);
+    background: var(--color-background-hover);
+    border-radius: var(--border-radius-element);
 }
 </style>

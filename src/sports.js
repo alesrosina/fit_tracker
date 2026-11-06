@@ -86,3 +86,13 @@ function sentenceCase(v) {
     const words = v.split('_').join(' ')
     return words.charAt(0).toUpperCase() + words.slice(1)
 }
+
+// Perceived effort (RPE, 1-10) in words
+export function rpeLabel(value) {
+    if (value <= 2) return t('fit_tracker', 'Very easy')
+    if (value <= 4) return t('fit_tracker', 'Easy')
+    if (value <= 6) return t('fit_tracker', 'Moderate')
+    if (value <= 8) return t('fit_tracker', 'Hard')
+    if (value === 9) return t('fit_tracker', 'Very hard')
+    return t('fit_tracker', 'Maximum effort')
+}

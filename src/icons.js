@@ -51,8 +51,70 @@ import sportsVolleyballSvg from '@material-symbols/svg-400/outlined/sports_volle
 import surfingSvg from '@material-symbols/svg-400/outlined/surfing.svg?raw'
 import syncSvg from '@material-symbols/svg-400/outlined/sync.svg?raw'
 import targetSvg from '@material-symbols/svg-400/outlined/target.svg?raw'
+import calendarMonthSvg from '@material-symbols/svg-400/outlined/calendar_month.svg?raw'
+import addSvg from '@material-symbols/svg-400/outlined/add.svg?raw'
+import backpackSvg from '@material-symbols/svg-400/outlined/backpack.svg?raw'
+import boltSvg from '@material-symbols/svg-400/outlined/bolt.svg?raw'
+import cloudSvg from '@material-symbols/svg-400/outlined/cloud.svg?raw'
+import contentCopySvg from '@material-symbols/svg-400/outlined/content_copy.svg?raw'
+import editSvg from '@material-symbols/svg-400/outlined/edit.svg?raw'
+import flagSvg from '@material-symbols/svg-400/outlined/flag.svg?raw'
+import foggySvg from '@material-symbols/svg-400/outlined/foggy.svg?raw'
+import linkSvg from '@material-symbols/svg-400/outlined/link.svg?raw'
+import mapSvg from '@material-symbols/svg-400/outlined/map.svg?raw'
+import partlyCloudyDaySvg from '@material-symbols/svg-400/outlined/partly_cloudy_day.svg?raw'
+import rainySvg from '@material-symbols/svg-400/outlined/rainy.svg?raw'
+import searchSvg from '@material-symbols/svg-400/outlined/search.svg?raw'
+import sunnySvg from '@material-symbols/svg-400/outlined/sunny.svg?raw'
+import thunderstormSvg from '@material-symbols/svg-400/outlined/thunderstorm.svg?raw'
+import trendingUpSvg from '@material-symbols/svg-400/outlined/trending_up.svg?raw'
+import trophySvg from '@material-symbols/svg-400/outlined/trophy.svg?raw'
+import warningSvg from '@material-symbols/svg-400/outlined/warning.svg?raw'
+import weatherSnowySvg from '@material-symbols/svg-400/outlined/weather_snowy.svg?raw'
+import stepsSvg from '@material-symbols/svg-400/outlined/steps.svg?raw'
+import thermostatSvg from '@material-symbols/svg-400/outlined/thermostat.svg?raw'
 
+import straightenSvg from '@material-symbols/svg-400/outlined/straighten.svg?raw'
+import timerSvg from '@material-symbols/svg-400/outlined/timer.svg?raw'
+import landscapeSvg from '@material-symbols/svg-400/outlined/landscape.svg?raw'
+import speedSvg from '@material-symbols/svg-400/outlined/speed.svg?raw'
+import checklistSvg from '@material-symbols/svg-400/outlined/checklist.svg?raw'
+import checkCircleSvg from '@material-symbols/svg-400/outlined/check_circle.svg?raw'
+import cancelSvg from '@material-symbols/svg-400/outlined/cancel.svg?raw'
+import radioButtonUncheckedSvg from '@material-symbols/svg-400/outlined/radio_button_unchecked.svg?raw'
+import dashboardSvg from '@material-symbols/svg-400/outlined/dashboard.svg?raw'
 export const icons = {
+    dashboard: dashboardSvg,
+    radio_button_unchecked: radioButtonUncheckedSvg,
+    cancel: cancelSvg,
+    check_circle: checkCircleSvg,
+    checklist: checklistSvg,
+    speed: speedSvg,
+    landscape: landscapeSvg,
+    timer: timerSvg,
+    straighten: straightenSvg,
+    add: addSvg,
+    calendar_month: calendarMonthSvg,
+    backpack: backpackSvg,
+    bolt: boltSvg,
+    cloud: cloudSvg,
+    content_copy: contentCopySvg,
+    edit: editSvg,
+    flag: flagSvg,
+    foggy: foggySvg,
+    link: linkSvg,
+    map: mapSvg,
+    partly_cloudy_day: partlyCloudyDaySvg,
+    rainy: rainySvg,
+    search: searchSvg,
+    sunny: sunnySvg,
+    thunderstorm: thunderstormSvg,
+    trending_up: trendingUpSvg,
+    trophy: trophySvg,
+    warning: warningSvg,
+    weather_snowy: weatherSnowySvg,
+    steps: stepsSvg,
+    thermostat: thermostatSvg,
     air: airSvg,
     arrow_back: arrowBackSvg,
     bedtime: bedtimeSvg,
