@@ -13,46 +13,47 @@ A self-hosted Nextcloud app for tracking your fitness activities and sleep — p
 
 FIT Tracker scans a folder in your Nextcloud for `.fit` files exported from a Garmin device (or any device that produces standard FIT files) and automatically imports them into a database. It then presents your data in a clean dashboard with charts, maps, and detailed views.
 
-### Activity tracking
+### Overview
 
-- **Supported sports:** the full Garmin FIT sport list — Running, Cycling, Hiking, Walking, Swimming, Gym, Breathwork, Meditation, Skiing, and dozens more (sailing, golf, rowing, kayaking, tennis, climbing, ...). Sports without a dedicated icon still import fine with a generic icon and a title-cased label
-- **Dashboard** for the last 7, 30 or 365 days, all time or a custom range: totals compared with the previous timeframe, progress on goals, a chart over the timeframe, training, highlights, gear, sleep and the activities in the timeframe. Each sport has the same dashboard
-- **Sidebar navigation** only lists the sport types (and Sleep) you actually have imported activities for
-- **Activity cards** display distance, duration, average heart rate, and calories
-- **Share button** on the activity detail page generates a shareable image card (route map + key stats) for the activity
-- **Detail view** per activity includes:
-  - Key stats (distance, pace or speed depending on sport, heart rate, elevation, calories, cadence)
-  - Interactive Leaflet map with GPS route and photo pins
-  - Photos taken along the route, shown as a thumbnail strip and as clickable map pins for any activity with a GPS track — only GPS-tagged JPEG photos stored in Nextcloud are matched, within 200 m of the track. Clicking one opens a viewer with previous/next navigation
-  - Charts for heart rate, elevation, power, and pace or speed (pace is shown Garmin-style: faster is up, m:ss values, stops dip to the bottom), plus average speed per km for running and cycling
-  - Lap table with per-lap pace/speed, heart rate and distance
-- **"⋯" menu** on activity and sleep detail pages:
-  - **Re-import from file** reads the `.fit` file again with the current parser
-  - **Delete** removes the entry and moves its `.fit` file to the Nextcloud trash; restoring the file imports it again on the next sync
+The first page is an **Overview** of a timeframe you choose: the last 7, 30 or 365 days, all time, or a custom range. Each sport in the navigation opens the same view for that sport, and the timeframe is kept when switching.
 
-### Sleep tracking
+- **Totals:** distance, time, elevation gain, activities, active days with streaks, calories and training load, each compared with the previous timeframe of the same length
+- **Goal progress** on each total, scaled to the timeframe (a weekly goal of 50 km is about 214 km over 30 days)
+- **Chart** over the timeframe per day, week, month or year, split by sport, with the previous timeframe as a line
+- **By sport, training** (fitness, fatigue, form and heart rate zones), **highlights** and **gear** due for replacement
+- **Sleep** for the same timeframe (see below)
+- **Activities** in the timeframe, with search and a distance filter
 
-- Automatically detects and separates Garmin sleep `.fit` files from activity files
-- Detected daytime naps are also imported as short sleep sessions
-- **Sleep list** shows all recorded sleep sessions with a **monthly stacked bar chart** (Deep / REM / Light / Awake), with previous/next navigation between months
-- **Dashboard widget** on the main activity page shows your last sleep session with duration, score, HRV and a stage distribution bar
-- **Detail view** per sleep session includes:
-  - Key stats: total duration, sleep score (0–100), HRV score, time in each stage
-  - Stage distribution bar
-  - Full sleep timeline — a coloured horizontal band showing every stage transition across the night with hour marks
-  - Stage table with timestamps and per-stage duration
+### Activities
+
+- **Supported sports:** the full Garmin FIT sport list — Running, Cycling, Hiking, Walking, Swimming, Gym, Breathwork, Meditation, Skiing, and dozens more (sailing, golf, rowing, kayaking, tennis, climbing, ...). Sports without a dedicated icon still import with a generic icon
+- **Sidebar navigation** only lists the sport types (and Sleep) you actually have data for
+- **Detail view** per activity:
+  - Key stats: distance, pace or speed depending on the sport, heart rate, elevation, calories, cadence, power
+  - Map with the GPS route, coloured by speed, heart rate or elevation if you like, and linked to the charts on hover
+  - Photos taken along the route: GPS-tagged JPEGs in your Nextcloud within 200 m of the track, as thumbnails and map pins, with a photo viewer
+  - Charts for heart rate, elevation, pace or speed, and power
+  - Heart rate zones and training load, splits per km or mile, laps, and power analysis (normalized power, intensity factor, TSS, power curve)
+  - Weather at the start, if turned on in the settings
+- **Edit** an activity's name, notes, perceived effort (1–10) and gear; these are kept when the file is imported again
+- **Share** an activity as an image card, or as a public link with the route, stats and charts (the first and last 200 m of the route can be hidden)
+- **"⋯" menu** on activity and sleep pages: **Re-import from file** reads the `.fit` file again; **Delete** removes the entry and moves its `.fit` file to the Nextcloud trash
+
+### Sleep
+
+- Garmin sleep and nap files are detected and kept apart from activities automatically
+- **Sleep page** with the same timeframes as the Overview: sleep per night with score and stages, best and worst night, sleep debt, usual bedtime and wake-up, sleep after rest days and after easier or harder training days, a chart of sleep stages per night, bedtime regularity, weekdays against weekends, and the sleep sessions in the timeframe
+- **Detail view** per night: duration, sleep score, HRV, time in each stage, and a timeline of every stage change through the night
 
 ### Insights
 
-- **Trends:** totals per week, month or year by sport, a year-over-year comparison, fitness / fatigue / form from heart rate training load (TRIMP), and time in heart rate zones per week
+- **Goals:** weekly, monthly or yearly targets for distance, time, elevation, activities, active days, calories, training load, sleep per night, sleep score and nights with enough sleep, for all sports or one. The goals page shows which of the last weeks, months or years each goal was reached, and your streak
+- **Trends:** year over year, fitness and fatigue over time, and time in heart rate zones per week
 - **Records:** fastest times from 400 m to the marathon and over 5–100 km on the bike, best power from 5 seconds to an hour, and the longest distance, time and climb per sport
 - **Heatmap:** every GPS route on one map, with the photos taken along them
 - **Gear:** shoes, bikes and other gear with the distance put on them and a reminder when it is time to replace them. Gear can be the default for a sport from a start date, or be picked per activity
-- **Goals:** weekly, monthly or yearly targets for distance, time, elevation, activities, active days, calories, training load and sleep. The dashboard scales them to the selected timeframe; the goals page shows which weeks, months or years they were reached
-- **Activity details:** heart rate zones, splits per km or mile, power analysis (normalized power, intensity factor, TSS, power curve), route coloured by speed, heart rate or elevation, and charts linked to the map. Activities can be renamed and get notes, perceived effort and gear
-- **Sharing:** besides the image card, a public link with the route, stats and charts; the first and last 200 m of the route can be hidden
-- **Sleep trends:** averages, regularity of bed and wake times, weekday vs weekend, and how you sleep after rest days and harder training days
-- **Nextcloud Dashboard widget** with this week's totals, the last sleep and recent activities
+
+Also included: a **Nextcloud Dashboard widget** with this week's totals, the last sleep and recent activities, and optionally a **calendar event** for every activity.
 
 ### Settings
 
@@ -72,20 +73,13 @@ Open **Settings** at the bottom of the navigation:
 
 ## Screenshots
 
-<!-- Add your own screenshots here. Suggested captures:
-     - Main dashboard (activity calendar + week chart + last sleep widget)
-     - Activity detail with map and charts
-     - Sleep list with monthly chart
-     - Sleep detail with timeline
--->
+| Overview | Activity detail |
+|----------|-----------------|
+| ![Overview](docs/overview.png) | ![Activity detail](docs/activity_detail.png) |
 
-| Dashboard | Activity detail |
-|-----------|----------------|
-| ![Dashboard](docs/activity_list.png) | ![Activity detail](docs/activity_detail.png) |
-
-| Sleep list | Sleep detail |
-|------------|-------------|
-| ![Sleep list](docs/sleep_list.png) | ![Sleep detail](docs/sleep_detail.png) |
+| Sleep | Sleep detail |
+|-------|--------------|
+| ![Sleep](docs/sleep.png) | ![Sleep detail](docs/sleep_detail.png) |
 
 ---
 

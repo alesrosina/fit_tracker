@@ -20,7 +20,7 @@
         <NcEmptyContent
             v-else-if="goals.list.length === 0"
             :name="t('fit_tracker', 'No goals yet')"
-            :description="t('fit_tracker', 'Set a weekly, monthly or yearly target, for example 100 km of cycling a month or 7 hours of sleep a night. The dashboard then shows your progress for the selected timeframe.')"
+            :description="t('fit_tracker', 'Set a weekly, monthly or yearly target, for example 100 km of cycling a month or 7 hours of sleep a night. The Overview then shows your progress for the selected timeframe.')"
         >
             <template #icon>
                 <NcIconSvgWrapper :svg="icons.checklist" />
@@ -34,7 +34,7 @@
 
         <template v-else>
             <p class="ft-panel__hint goals-page__intro">
-                {{ t('fit_tracker', 'The dashboard shows each goal scaled to the selected timeframe: a weekly goal of 50 km is about 214 km over the last 30 days. Below, every goal is checked per calendar week, month or year.') }}
+                {{ t('fit_tracker', 'The Overview shows each goal scaled to the selected timeframe: a weekly goal of 50 km is about 214 km over the last 30 days. Below, every goal is checked per calendar week, month or year.') }}
             </p>
             <NcNoteCard v-if="needsTraining && training.analyzing" type="info">
                 {{ n('fit_tracker', 'Analyzing heart rate data of %n older activity…', 'Analyzing heart rate data of %n older activities…', training.analyzing) }}

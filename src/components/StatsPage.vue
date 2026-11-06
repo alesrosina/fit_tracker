@@ -40,8 +40,8 @@
             </div>
 
             <p class="ft-panel__hint stats-page__intro">
-                {{ t('fit_tracker', 'Long-term views. Totals for any timeframe are on the dashboard.') }}
-                <router-link to="/">{{ t('fit_tracker', 'Open dashboard') }}</router-link>
+                {{ t('fit_tracker', 'Long-term views. Totals for any timeframe are on the Overview.') }}
+                <router-link to="/">{{ t('fit_tracker', 'Open Overview') }}</router-link>
             </p>
 
             <section class="ft-panel">

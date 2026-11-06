@@ -28,9 +28,9 @@ Choose any folder in your Nextcloud as the source for .fit files. New files are 
     <namespace>FitTracker</namespace>
     <category>tools</category>
     <bugs>https://github.com/alesrosina/fit_tracker/issues</bugs>
-    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_list.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/overview.png</screenshot>
     <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/activity_detail.png</screenshot>
-    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_list.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep.png</screenshot>
     <screenshot>https://raw.githubusercontent.com/alesrosina/fit_tracker/main/docs/sleep_detail.png</screenshot>
     <dependencies>
         <php min-version="8.1"/>
