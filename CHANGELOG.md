@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.3.2]
+
+### Fixed
+- Importing failed with `Class "adriangibbons\phpFITFileAnalysis" not found` on fresh installs of 1.3.0 and 1.3.1, because the release package was missing the FIT parsing library (#9)
+
+### Changed
+- The release package no longer includes the FIT library's demo files and tests, which makes it much smaller
+
 ## [1.3.1]
 
 ### Changed
