@@ -49,24 +49,40 @@ jobs:
         run: |
           STAGE=/tmp/build/${{ env.APP_ID }}
           rm -rf /tmp/build && mkdir -p "$STAGE"
+          # Patterns start with '/' so they only match at the repo root. Unanchored,
+          # 'src/' also dropped vendor/adriangibbons/php-fit-file-analysis/src/ (issue #9).
           rsync -a \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='.claude/' \
-            --exclude='.gitignore' \
-            --exclude='.l10nignore' \
-            --exclude='node_modules/' \
-            --exclude='src/' \
-            --exclude='docs/' \
-            --exclude='tests/' \
-            --exclude='webpack.js' \
-            --exclude='package.json' \
-            --exclude='package-lock.json' \
-            --exclude='composer.json' \
-            --exclude='composer.lock' \
-            --exclude='appinfo/signature.json' \
+            --exclude='/.git/' \
+            --exclude='/.github/' \
+            --exclude='/.claude/' \
+            --exclude='/.gitignore' \
+            --exclude='/.l10nignore' \
+            --exclude='/node_modules/' \
+            --exclude='/src/' \
+            --exclude='/docs/' \
+            --exclude='/tests/' \
+            --exclude='/webpack.js' \
+            --exclude='/package.json' \
+            --exclude='/package-lock.json' \
+            --exclude='/composer.json' \
+            --exclude='/composer.lock' \
+            --exclude='/appinfo/signature.json' \
+            --exclude='/vendor/adriangibbons/php-fit-file-analysis/demo/' \
+            --exclude='/vendor/adriangibbons/php-fit-file-analysis/tests/' \
             ./ "$STAGE/"
           echo "Staged $(find "$STAGE" -type f | wc -l) files"
+
+      - name: Verify staged app loads its dependencies
+        run: |
+          STAGE=/tmp/build/${{ env.APP_ID }}
+          php -r '
+            require $argv[1] . "/vendor/autoload.php";
+            if (!class_exists("adriangibbons\\phpFITFileAnalysis")) {
+              fwrite(STDERR, "phpFITFileAnalysis missing from staged vendor/\n");
+              exit(1);
+            }
+            echo "phpFITFileAnalysis found\n";
+          ' "$STAGE"
 
       # Nextcloud's IntegrityCheck\Checker verifies with phpseclib using
       # RSA-PSS, hash SHA-1, MGF1 SHA-512, salt length 0, over json_encode(ksort(hashes)).
